@@ -1,10 +1,9 @@
-from app.database import registrar_usuario, login_usuario
 import streamlit as st
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
+from app.database import registrar_usuario, login_usuario, guardar_movimiento, obtener_movimientos
 from app.ai_core import clasificar_gasto
-from app.finance_logic import registrar_nuevo_ingreso, registrar_nuevo_egreso, obtener_datos_para_grafica
 
 # Configuración de la página de la app
 st.set_page_config(page_title="Polibank Prototipo", page_icon="🚀", layout="centered")
@@ -45,43 +44,70 @@ if "usuario_conectado" not in st.session_state:
             else:
                 st.warning("Llena todos los campos.")
 
-# --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP ---
+# --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP REAL ---
 else:
-    # Botón para cerrar sesión arriba
+    # Capturamos los datos del usuario conectado
+    user_id = st.session_state["usuario_conectado"]["id"]
+    correo_user = st.session_state["usuario_conectado"]["correo"]
+
     col_user, col_logout = st.columns([4, 1])
     with col_user:
-        st.write(f"👤 Conectado como: **{st.session_state['usuario_conectado']['correo']}**")
+        st.write(f"👤 Conectado como: **{correo_user}**")
     with col_logout:
         if st.button("❌ Salir"):
             del st.session_state["usuario_conectado"]
             st.rerun()
 
-    # TRUCO INFALIBLE: Crear el historial en la memoria interna del navegador (Session State)
-    if "historial_web" not in st.session_state:
-        st.session_state["historial_web"] = []
+    # TRAEMOS LOS MOVIMIENTOS REALES DESDE SUPABASE
+    movimientos_db = obtener_movimientos(user_id)
+
+    # Procesamos los datos reales para las métricas y gráficas
+    total_ingresos = 0.0
+    total_egresos = 0.0
+    historial_tabla = []
+
+    for mov in movimientos_db:
+        monto_num = float(mov["monto"])
+        # Formateamos la fecha que viene de la BD (YYYY-MM-DD) a algo más amigable
+        fecha_dt = datetime.strptime(mov["fecha"], "%Y-%m-%d")
+        fecha_formateada = fecha_dt.strftime("%d-%b")
+
+        if mov["tipo"] == "Ingreso":
+            total_ingresos += monto_num
+            tipo_emoji = "💰 Ingreso"
+            monto_texto = f"+${monto_num:.2f}"
+        else:
+            total_egresos += monto_num
+            tipo_emoji = "🛒 Gasto"
+            monto_texto = f"-${monto_num:.2f}"
+
+        historial_tabla.append({
+            "Fecha": fecha_formateada,
+            "Tipo": tipo_emoji,
+            "Detalle": mov["detalle"],
+            "Categoría": mov["categoria"].upper(),
+            "Monto ($)": monto_texto
+        })
+
+    balance = total_ingresos - total_egresos
 
     # SECCIÓN 1: BALANCE GENERAL
     st.header("📊 Resumen de tu Cuenta")
-    datos = obtener_datos_para_grafica()
-
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Ingresos", f"${datos['total_ingresos']:.2f}")
-    col2.metric("Total Gastos", f"${datos['total_egresos']:.2f}")
-    col3.metric("Saldo Disponible (Saldo)", f"${datos['balance']:.2f}")
+    col1.metric("Total Ingresos", f"${total_ingresos:.2f}")
+    col2.metric("Total Gastos", f"${total_egresos:.2f}")
+    col3.metric("Saldo Disponible", f"${balance:.2f}")
 
     # SECCIÓN 2: GRÁFICA COMPARATIVA DIARIA
-    st.subheader("📊 Comparativa de Hoy: Ingresos vs Egresos")
-
+    st.subheader("📊 Comparativa Total: Ingresos vs Egresos")
     fecha_hoy = datetime.now().strftime("%d-%b")
 
-    data_grafico = {
-        "Fecha": [fecha_hoy, fecha_hoy],
-        "Monto ($)": [datos["total_ingresos"], datos["total_egresos"]],
-        "Tipo": ["Ingresos", "Egresos"]
-    }
-    df = pd.DataFrame(data_grafico)
-
-    if datos["total_ingresos"] > 0 or datos["total_egresos"] > 0:
+    if total_ingresos > 0 or total_egresos > 0:
+        data_grafico = {
+            "Monto ($)": [total_ingresos, total_egresos],
+            "Tipo": ["Ingresos", "Egresos"]
+        }
+        df = pd.DataFrame(data_grafico)
         fig = px.bar(
             df,
             x=[-0.12, 0.12],
@@ -94,7 +120,7 @@ else:
             bargap=0.0,
             xaxis=dict(
                 tickvals=[0],
-                ticktext=[fecha_hoy],
+                ticktext=["Histórico"],
                 range=[-1, 1]
             ),
             xaxis_title=None,
@@ -103,38 +129,35 @@ else:
         )
         st.plotly_chart(fig)
     else:
-        st.info("Aún no hay movimientos registrados hoy. ¡Agrega un monto abajo para activar el gráfico!")
+        st.info("Aún no tienes movimientos guardados en tu cuenta. ¡Agrega uno abajo para activar el gráfico!")
 
-    # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS
-    st.header("📜 Historial de Actividad")
-    if len(st.session_state["historial_web"]) > 0:
-        df_historial = pd.DataFrame(st.session_state["historial_web"])
+    # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS REALES
+    st.header("📜 Historial de Actividad (Base de Datos)")
+    if len(historial_tabla) > 0:
+        df_historial = pd.DataFrame(historial_tabla)
         st.dataframe(df_historial, use_container_width=True, hide_index=True)
     else:
-        st.info("No hay transacciones registradas en esta sesión.")
+        st.info("No hay transacciones registradas en tu cuenta permanente.")
 
-    # SECCIÓN 4: ACCIONES (TUS FORMULARIOS REGRESARON)
+    # SECCIÓN 4: ACCIONES (GUARDADO DIRECTO A SUPABASE)
     st.header("📥 Registrar Movimientos")
-
     tab1, tab2 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
+
+    fecha_actual_db = datetime.now().strftime("%Y-%m-%d")
 
     with tab1:
         with st.form("form_ingreso", clear_on_submit=True):
             monto_ingreso = st.number_input("Monto del Ingreso ($)", min_value=0.0, step=10.0)
             bot_ingreso = st.form_submit_button("Guardar Ingreso")
             if bot_ingreso and monto_ingreso > 0:
-                registrar_nuevo_ingreso(monto_ingreso)
-
-                # Guardamos en la tabla interna de la web
-                st.session_state["historial_web"].append({
-                    "Fecha": datetime.now().strftime("%d-%b %H:%M"),
-                    "Tipo": "💰 Ingreso",
-                    "Detalle": "Ingreso manual de dinero",
-                    "Categoría": "INGRESOS",
-                    "Monto ($)": f"+${monto_ingreso:.2f}"
-                })
-                st.success(f"¡Ingreso de ${monto_ingreso} registrado con éxito!")
-                st.rerun()
+                # Guardamos directo en Supabase
+                exito, msg = guardar_movimiento(user_id, "Ingreso", "Ingreso manual de dinero", monto_ingreso,
+                                                "INGRESOS", fecha_actual_db)
+                if exito:
+                    st.success(f"¡Ingreso de ${monto_ingreso} guardado en la nube!")
+                    st.rerun()
+                else:
+                    st.error(msg)
 
     with tab2:
         with st.form("form_gasto", clear_on_submit=True):
@@ -145,26 +168,11 @@ else:
             if bot_gasto and monto_gasto > 0 and texto_gasto:
                 with st.spinner("La IA de Polibank está clasificando tu gasto..."):
                     categoria_ia = clasificar_gasto(texto_gasto)
-                    registrar_nuevo_egreso(monto_gasto, categoria_ia)
-
-                    # Guardamos en la tabla interna de la web con el texto original
-                    st.session_state["historial_web"].append({
-                        "Fecha": datetime.now().strftime("%d-%b %H:%M"),
-                        "Tipo": "🛒 Gasto",
-                        "Detalle": texto_gasto,
-                        "Categoría": categoria_ia.upper(),
-                        "Monto ($)": f"-${monto_gasto:.2f}"
-                    })
-                st.success(f"Gasto guardado. La IA lo clasificó en: **{categoria_ia.upper()}**")
-                st.rerun()
-
-    # SECCIÓN 5: BOTÓN DE RESETEO
-    st.markdown("---")
-    if st.button("🗑️ Borrar todos los datos y reiniciar"):
-        from app.finance_logic import historial_ingresos, historial_egresos
-
-        historial_ingresos.clear()
-        historial_egresos.clear()
-        st.session_state["historial_web"].clear()  # Limpiamos el historial web
-        st.success("¡Datos borrados por completo!")
-        st.rerun()
+                    # Guardamos directo en Supabase
+                    exito, msg = guardar_movimiento(user_id, "Gasto", texto_gasto, monto_gasto, categoria_ia.upper(),
+                                                    fecha_actual_db)
+                if exito:
+                    st.success(f"Gasto guardado en la nube. Categoría IA: **{categoria_ia.upper()}**")
+                    st.rerun()
+                else:
+                    st.error(msg)

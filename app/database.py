@@ -43,3 +43,30 @@ def login_usuario(correo, password):
         return False, "Correo o contraseña incorrectos."
     except Exception as e:
         return False, f"Error al conectar con la base de datos: {str(e)}"
+
+
+# 3. FUNCIÓN PARA REGISTRAR UN MOVIMIENTO REAL EN SUPABASE
+def guardar_movimiento(usuario_id, tipo, detalle, monto, categoria, fecha):
+    try:
+        # Usamos los nombres exactos de tus columnas en Supabase
+        supabase.from_("movimientos").insert({
+            "usuario_id": usuario_id,
+            "tipo": tipo,
+            "detalle": detalle,
+            "monto": float(monto),
+            "categoria": categoria,
+            "fecha": str(fecha)
+        }).execute()
+        return True, "Movimiento guardado con éxito."
+    except Exception as e:
+        return False, f"Error al guardar movimiento: {str(e)}"
+
+
+# 4. FUNCIÓN PARA OBTENER LOS MOVIMIENTOS REALES DE UN USUARIO
+def obtener_movimientos(usuario_id):
+    try:
+        respuesta = supabase.from_("movimientos").select("*").eq("usuario_id", usuario_id).order("fecha", ascending=False).execute()
+        return respuesta.data
+    except Exception as e:
+        print(f"Error al obtener movimientos: {str(e)}")
+        return []
