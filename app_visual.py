@@ -3,7 +3,6 @@ from app.database import registrar_usuario, login_usuario, guardar_movimiento, o
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
-from app.database import registrar_usuario, login_usuario, guardar_movimiento, obtener_movimientos
 from app.ai_core import clasificar_gasto
 
 # Configuración de la página de la app

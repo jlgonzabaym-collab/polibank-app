@@ -1,4 +1,3 @@
-import streamlit as st
 import bcrypt
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
