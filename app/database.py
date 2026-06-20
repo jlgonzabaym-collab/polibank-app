@@ -65,7 +65,8 @@ def guardar_movimiento(usuario_id, tipo, detalle, monto, categoria, fecha):
 # 4. FUNCIÓN PARA OBTENER LOS MOVIMIENTOS REALES DE UN USUARIO
 def obtener_movimientos(usuario_id):
     try:
-        respuesta = supabase.from_("movimientos").select("*").eq("usuario_id", usuario_id).order("fecha", ascending=False).execute()
+        # Quitamos el .order() por ahora para descartar errores de formato de fecha
+        respuesta = supabase.from_("movimientos").select("*").eq("usuario_id", usuario_id).execute()
         return respuesta.data
     except Exception as e:
         print(f"Error al obtener movimientos: {str(e)}")
