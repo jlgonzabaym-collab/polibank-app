@@ -1,15 +1,28 @@
+from datetime import datetime
+
 # Listas temporales en memoria para simular la base de datos
 historial_ingresos = []
 historial_egresos = []  # Cada egreso tendrá: {"monto": X, "categoria": Y}
+historial_general = []  # NUEVO: Guardará el detalle de todo para la tabla visual
 
 
 def registrar_nuevo_ingreso(monto: float):
     # Guarda el ingreso en nuestra lista
     historial_ingresos.append(monto)
+
+    # NUEVO: Guardamos el registro en el historial general
+    historial_general.append({
+        "Fecha": datetime.now().strftime("%d-%b %H:%M"),
+        "Tipo": "💰 Ingreso",
+        "Detalle": "Ingreso manual de dinero",
+        "Categoría": "INGRESOS",
+        "Monto ($)": f"+${monto:.2f}"
+    })
+
     return {"status": "Ingreso guardado", "monto": monto}
 
 
-def registrar_nuevo_egreso(monto: float, categoria: str):
+def registrar_nuevo_egreso(monto: float, categoria: str, texto: str = "Gasto registrado"):
     # Pasamos a minúsculas y quitamos espacios extras
     cat_limpia = categoria.lower().strip()
 
@@ -19,6 +32,16 @@ def registrar_nuevo_egreso(monto: float, categoria: str):
     # Guarda el egreso con la categoría limpia
     egreso = {"monto": monto, "categoria": cat_limpia}
     historial_egresos.append(egreso)
+
+    # NUEVO: Guardamos el registro con la descripción de la IA en el historial general
+    historial_general.append({
+        "Fecha": datetime.now().strftime("%d-%b %H:%M"),
+        "Tipo": "🛒 Gasto",
+        "Detalle": texto,
+        "Categoría": cat_limpia.upper(),
+        "Monto ($)": f"-${monto:.2f}"
+    })
+
     return {"status": "Egreso guardado", "monto": monto, "categoria": cat_limpia}
 
 
