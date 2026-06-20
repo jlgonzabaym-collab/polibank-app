@@ -5,11 +5,19 @@ import pandas as pd
 import plotly.express as px
 from app.ai_core import clasificar_gasto
 
-# Configuración de la página de la app
 st.set_page_config(page_title="Polibank Prototipo", page_icon="🚀", layout="centered")
 
-st.title("🏦 Polibank - Prototipo ESPOL")
-st.write("Prueba cómo funciona la IA y las gráficas financieras en tiempo real.")
+# Cambiamos la proporción a [1, 5] para pegar más el título al logo, y mantenemos el alineado al centro
+col_logo, col_titulo = st.columns([1, 5], vertical_alignment="center")
+
+with col_logo:
+    # Hacemos el logo un poquito más grande (de 90 a 110)
+    st.image("logo_polibank.png", width=110)
+
+with col_titulo:
+    st.title("Polibank - Prototipo ESPOL")
+
+# El st.write de abajo lo borramos por completo para que quede limpio
 
 # --- CONTROL DE SESIÓN ---
 if "usuario_conectado" not in st.session_state:
@@ -63,7 +71,6 @@ else:
     st.write("---")
 
     # --- MENÚ DE NAVEGACIÓN PRINCIPAL (BOTONES/OPCIONES) ---
-    # Usamos st.radio o st.sidebar para simular los botones grandes de navegación limpia
     opcion_menu = st.sidebar.radio(
         "📱 Navegación Polibank",
         ["💰 Control de Ingresos y Gastos", "📚 Educación Financiera"]
@@ -116,7 +123,7 @@ else:
         balance = total_ingresos - total_egresos
 
         # SECCIÓN 1: BALANCE GENERAL
-        st.header("📊 Resumen de tu Cuenta")
+        st.header("Resumen de tu Cuenta")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Ingresos", f"${total_ingresos:.2f}")
         col2.metric("Total Gastos", f"${total_egresos:.2f}")
@@ -163,7 +170,7 @@ else:
         st.write("---")
 
         # SECCIÓN 4: ACCIONES (FORMULARIOS CON SELECTOR DE FECHA DINÁMICO)
-        st.header("📥 Registrar Movimientos")
+        st.header("Registrar Movimientos")
         tab1, tab2 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
 
         with tab1:
