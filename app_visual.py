@@ -8,7 +8,7 @@ from app.ai_core import clasificar_gasto
 # Configuración de la página de la app
 st.set_page_config(page_title="Polibank Prototipo", page_icon="🚀", layout="centered")
 
-st.title("🏦 Polibank - Prototipo Interactivo")
+st.title("🏦 Polibank - Prototipo ESPOL")
 st.write("Prueba cómo funciona la IA y las gráficas financieras en tiempo real.")
 
 # --- CONTROL DE SESIÓN ---
@@ -82,19 +82,28 @@ else:
         total_egresos = 0.0
         historial_tabla = []
 
+        # Diccionario para agrupar ingresos y gastos por día
+        datos_por_dia = {}
+
         for mov in movimientos_db:
             monto_num = float(mov["monto"])
             fecha_dt = datetime.strptime(mov["fecha"], "%Y-%m-%d")
-            fecha_formateada = fecha_dt.strftime("%d-%b")
+            fecha_formateada = fecha_dt.strftime("%d-%b")  # Ejemplo: 20-Jun
+
+            # Inicializamos el día en el diccionario si no existe
+            if fecha_formateada not in datos_por_dia:
+                datos_por_dia[fecha_formateada] = {"Ingresos": 0.0, "Egresos": 0.0}
 
             if mov["tipo"] == "Ingreso":
                 total_ingresos += monto_num
                 tipo_emoji = "💰 Ingreso"
                 monto_texto = f"+${monto_num:.2f}"
+                datos_por_dia[fecha_formateada]["Ingresos"] += monto_num
             else:
                 total_egresos += monto_num
                 tipo_emoji = "🛒 Gasto"
                 monto_texto = f"-${monto_num:.2f}"
+                datos_por_dia[fecha_formateada]["Egresos"] += monto_num
 
             historial_tabla.append({
                 "Fecha": fecha_formateada,
@@ -113,56 +122,62 @@ else:
         col2.metric("Total Gastos", f"${total_egresos:.2f}")
         col3.metric("Saldo Disponible", f"${balance:.2f}")
 
-        # SECCIÓN 2: GRÁFICA COMPARATIVA DIARIA
-        st.subheader("📊 Comparativa Total: Ingresos vs Egresos")
-        if total_ingresos > 0 or total_egresos > 0:
-            data_grafico = {
-                "Monto ($)": [total_ingresos, total_egresos],
-                "Tipo": ["Ingresos", "Egresos"]
-            }
-            df = pd.DataFrame(data_grafico)
+        # SECCIÓN 2: GRÁFICA COMPARATIVA DIARIA (INTERACTIVA POR DÍAS)
+        st.subheader(" Comparativa Diaria: Ingresos vs Egresos")
+        if len(datos_por_dia) > 0:
+            filas_grafico = []
+            for fecha, montos in datos_por_dia.items():
+                filas_grafico.append({"Fecha": fecha, "Monto ($)": montos["Ingresos"], "Tipo": "Ingresos"})
+                filas_grafico.append({"Fecha": fecha, "Monto ($)": montos["Egresos"], "Tipo": "Egresos"})
+
+            df_grafico = pd.DataFrame(filas_grafico)
+
             fig = px.bar(
-                df,
-                x=[-0.12, 0.12],
+                df_grafico,
+                x="Fecha",
                 y="Monto ($)",
                 color="Tipo",
-                color_discrete_map={"Ingresos": "#0052cc", "Egresos": "#ff0000"}
+                barmode="group",
+                color_discrete_map={"Ingresos": "#0052cc", "Egresos": "#ff0000"},
+                text_auto='.2f'
             )
-            fig.update_traces(width=0.24)
+
             fig.update_layout(
-                bargap=0.0,
-                xaxis=dict(tickvals=[0], ticktext=["Histórico"], range=[-1, 1]),
-                xaxis_title=None,
-                width=500,
+                xaxis_title="Días",
+                yaxis_title="Monto ($)",
+                legend_title="Tipo",
                 height=400
             )
-            st.plotly_chart(fig)
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Aún no tienes movimientos guardados en tu cuenta. ¡Agrega uno abajo para activar el gráfico!")
 
-        # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS REALES
-        st.header("📜 Historial de Actividad (Base de Datos)")
+        # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS
+        st.subheader(" Historial de Movimientos")
         if len(historial_tabla) > 0:
-            df_historial = pd.DataFrame(historial_tabla)
-            st.dataframe(df_historial, use_container_width=True, hide_index=True)
+            df_tabla = pd.DataFrame(historial_tabla)
+            st.dataframe(df_tabla, use_container_width=True, hide_index=True)
         else:
-            st.info("No hay transacciones registradas en tu cuenta permanente.")
+            st.write("No hay transacciones registradas.")
 
-        # SECCIÓN 4: ACCIONES (GUARDADO DIRECTO A SUPABASE)
+        st.write("---")
+
+        # SECCIÓN 4: ACCIONES (FORMULARIOS CON SELECTOR DE FECHA DINÁMICO)
         st.header("📥 Registrar Movimientos")
         tab1, tab2 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
-
-        fecha_actual_db = datetime.now().strftime("%Y-%m-%d")
 
         with tab1:
             with st.form("form_ingreso", clear_on_submit=True):
                 monto_ingreso = st.number_input("Monto del Ingreso ($)", min_value=0.0, step=10.0)
+                fecha_ingreso = st.date_input("Fecha del Ingreso", value=datetime.now())
                 bot_ingreso = st.form_submit_button("Guardar Ingreso")
+
                 if bot_ingreso and monto_ingreso > 0:
+                    fecha_ingreso_db = fecha_ingreso.strftime("%Y-%m-%d")
                     exito, msg = guardar_movimiento(user_id, "Ingreso", "Ingreso manual de dinero", monto_ingreso,
-                                                    "INGRESOS", fecha_actual_db)
+                                                    "INGRESOS", fecha_ingreso_db)
                     if exito:
-                        st.success(f"¡Ingreso de ${monto_ingreso} guardado en la nube!")
+                        st.success(f"¡Ingreso de ${monto_ingreso} guardado para el {fecha_ingreso_db}!")
                         st.rerun()
                     else:
                         st.error(msg)
@@ -171,19 +186,20 @@ else:
             with st.form("form_gasto", clear_on_submit=True):
                 monto_gasto = st.number_input("Monto del Gasto ($)", min_value=0.0, step=1.0)
                 texto_gasto = st.text_input("¿En qué gastaste?", placeholder="Ej: un almuerzo en el comedor de la FCSH")
+                fecha_gasto = st.date_input("Fecha del Gasto", value=datetime.now())
                 bot_gasto = st.form_submit_button("Procesar Gasto con IA")
 
                 if bot_gasto and monto_gasto > 0 and texto_gasto:
                     with st.spinner("La IA de Polibank está clasificando tu gasto..."):
+                        fecha_gasto_db = fecha_gasto.strftime("%Y-%m-%d")
                         categoria_ia = clasificar_gasto(texto_gasto)
                         exito, msg = guardar_movimiento(user_id, "Gasto", texto_gasto, monto_gasto,
-                                                        categoria_ia.upper(), fecha_actual_db)
+                                                        categoria_ia.upper(), fecha_gasto_db)
                     if exito:
-                        st.success(f"Gasto guardado en la nube. Categoría IA: **{categoria_ia.upper()}**")
+                        st.success(f"Gasto guardado para el {fecha_gasto_db}. Categoría IA: **{categoria_ia.upper()}**")
                         st.rerun()
                     else:
                         st.error(msg)
-
 
     # BOTÓN/OPCIÓN 2: EDUCACIÓN FINANCIERA
     elif opcion_menu == "📚 Educación Financiera":

@@ -15,17 +15,19 @@ def obtener_categoria(gasto: str):
     return {"gasto": gasto, "categoria": categoria_final}
 
 # 2. Ruta para meter ingresos de plata
+from datetime import date
+
 @router.post("/ingresos")
-def agregar_ingreso(monto: float):
-    return registrar_nuevo_ingreso(monto)
+def agregar_ingreso(monto: float, fecha: date):
+    return registrar_nuevo_ingreso(monto, fecha=fecha)
 
 # 3. LA RUTA CLAVE: Registra el gasto usando la IA y lo guarda en la calculadora
+from datetime import date
+
 @router.post("/egresos")
-def agregar_egreso(monto: float, texto_gasto: str):
-    # Primero la IA hace su magia para saber qué es
+def agregar_egreso(monto: float, texto_gasto: str, fecha: date):
     categoria_detectada = clasificar_gasto(texto_gasto)
-    # Luego la lógica financiera lo mete al historial sumando en su categoría
-    resultado = registrar_nuevo_egreso(monto, categoria_detectada)
+    resultado = registrar_nuevo_egreso(monto, categoria_detectada, texto=texto_gasto, fecha=fecha)
     return resultado
 
 # 4. Ruta que pide Flutter para dibujar los gráficos en el cel

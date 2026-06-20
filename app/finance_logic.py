@@ -1,55 +1,76 @@
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from typing import Dict, List, Optional
 
-# Listas temporales en memoria para simular la base de datos
-historial_ingresos = []
-historial_egresos = []  # Cada egreso tendrá: {"monto": X, "categoria": Y}
-historial_general = []  # NUEVO: Guardará el detalle de todo para la tabla visual
+# Listas temporales en memoria
+historial_ingresos = []  # [{"monto": X, "fecha": date}]
+historial_egresos = []   # [{"monto": X, "categoria": Y, "fecha": date}]
+historial_general = []   # detalle para tabla visual
 
 
-def registrar_nuevo_ingreso(monto: float):
-    # Guarda el ingreso en nuestra lista
-    historial_ingresos.append(monto)
+def _normalizar_fecha(fecha: Optional[date]) -> date:
+    # Si no mandan fecha, usamos hoy
+    return fecha or date.today()
 
-    # NUEVO: Guardamos el registro en el historial general
+
+def registrar_nuevo_ingreso(monto: float, fecha: Optional[date] = None):
+    fecha_norm = _normalizar_fecha(fecha)
+
+    historial_ingresos.append({
+        "monto": monto,
+        "fecha": fecha_norm
+    })
+
     historial_general.append({
-        "Fecha": datetime.now().strftime("%d-%b %H:%M"),
+        "Fecha": fecha_norm.strftime("%d-%b %H:%M"),  # Nota: sin hora real
         "Tipo": "💰 Ingreso",
         "Detalle": "Ingreso manual de dinero",
         "Categoría": "INGRESOS",
         "Monto ($)": f"+${monto:.2f}"
     })
 
-    return {"status": "Ingreso guardado", "monto": monto}
+    return {"status": "Ingreso guardado", "monto": monto, "fecha": fecha_norm.isoformat()}
 
 
-def registrar_nuevo_egreso(monto: float, categoria: str, texto: str = "Gasto registrado"):
-    # Pasamos a minúsculas y quitamos espacios extras
+def registrar_nuevo_egreso(monto: float, categoria: str, texto: str = "Gasto registrado", fecha: Optional[date] = None):
+    fecha_norm = _normalizar_fecha(fecha)
+
     cat_limpia = categoria.lower().strip()
+    cat_limpia = (cat_limpia
+                  .replace("á", "a").replace("é", "e").replace("í", "i")
+                  .replace("ó", "o").replace("ú", "u"))
 
-    # Quitamos cualquier tilde rara que pueda mandar la IA (incluyendo la ú de estudios)
-    cat_limpia = cat_limpia.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+    historial_egresos.append({
+        "monto": monto,
+        "categoria": cat_limpia,
+        "fecha": fecha_norm
+    })
 
-    # Guarda el egreso con la categoría limpia
-    egreso = {"monto": monto, "categoria": cat_limpia}
-    historial_egresos.append(egreso)
-
-    # NUEVO: Guardamos el registro con la descripción de la IA en el historial general
     historial_general.append({
-        "Fecha": datetime.now().strftime("%d-%b %H:%M"),
+        "Fecha": fecha_norm.strftime("%d-%b %H:%M"),
         "Tipo": "🛒 Gasto",
         "Detalle": texto,
         "Categoría": cat_limpia.upper(),
         "Monto ($)": f"-${monto:.2f}"
     })
 
-    return {"status": "Egreso guardado", "monto": monto, "categoria": cat_limpia}
+    return {"status": "Egreso guardado", "monto": monto, "categoria": cat_limpia, "fecha": fecha_norm.isoformat()}
 
 
-def obtener_datos_para_grafica():
-    # Sumamos todos los ingresos acumulados
-    total_ingresos = sum(historial_ingresos)
+def _rango_fechas(desde: date, hasta: date) -> List[date]:
+    if desde > hasta:
+        raise ValueError("La fecha 'desde' no puede ser mayor que 'hasta'")
+    dias = (hasta - desde).days
+    return [desde + timedelta(days=i) for i in range(dias + 1)]
 
-    # Preparamos un diccionario con las categorías fijas en 0
+
+def obtener_datos_para_grafica(desde: date, hasta: date) -> Dict:
+    fechas = _rango_fechas(desde, hasta)
+
+    # Inicializamos series por día
+    ingresos_por_dia = {d.isoformat(): 0.0 for d in fechas}
+    egresos_por_dia = {d.isoformat(): 0.0 for d in fechas}
+
+    # Totales por categoría (opcional si quieres por todo el rango)
     totales_por_categoria = {
         "comida": 0.0,
         "transporte": 0.0,
@@ -58,22 +79,39 @@ def obtener_datos_para_grafica():
         "otros": 0.0
     }
 
-    # Recorremos los egresos y los vamos sumando en su categoría correspondiente
-    for egreso in historial_egresos:
-        cat = egreso["categoria"]
-        if cat in totales_por_categoria:
-            totales_por_categoria[cat] += egreso["monto"]
-        else:
-            totales_por_categoria["otros"] += egreso["monto"]
+    # Agregamos ingresos del rango
+    for ing in historial_ingresos:
+        f = ing["fecha"]
+        if desde <= f <= hasta:
+            ingresos_por_dia[f.isoformat()] += ing["monto"]
 
-    # Calculamos el total general de gastos
-    total_egresos = sum(totales_por_categoria.values())
+    # Agregamos egresos del rango y también totales por categoría
+    for eg in historial_egresos:
+        f = eg["fecha"]
+        if desde <= f <= hasta:
+            egresos_por_dia[f.isoformat()] += eg["monto"]
 
-    # Calculamos el balance neto (lo que le queda disponible)
+            cat = eg["categoria"]
+            if cat in totales_por_categoria:
+                totales_por_categoria[cat] += eg["monto"]
+            else:
+                totales_por_categoria["otros"] += eg["monto"]
+
+    # Construimos balance por día
+    labels = [d.isoformat() for d in fechas]
+    series_ingresos = [ingresos_por_dia[l] for l in labels]
+    series_egresos = [egresos_por_dia[l] for l in labels]
+    series_neto = [i - e for i, e in zip(series_ingresos, series_egresos)]
+
+    total_ingresos = sum(series_ingresos)
+    total_egresos = sum(series_egresos)
     balance_neto = total_ingresos - total_egresos
 
-    # Le devolvemos todo ordenadito a la app para que dibuje la gráfica
     return {
+        "labels_dias": labels,                # ✅ eje X real
+        "ingresos_por_dia": series_ingresos, # serie
+        "egresos_por_dia": series_egresos,   # serie
+        "neto_por_dia": series_neto,         # serie
         "total_ingresos": total_ingresos,
         "total_egresos": total_egresos,
         "balance": balance_neto,
