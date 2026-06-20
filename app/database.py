@@ -71,3 +71,17 @@ def obtener_movimientos(usuario_id):
     except Exception as e:
         print(f"Error al obtener movimientos: {str(e)}")
         return []
+
+
+def obtener_videos_educativos():
+    """Trae la lista de videos subidos por el administrador desde Supabase"""
+    # Forzamos a Python a buscar la variable 'supabase' que está arriba en el archivo
+    global supabase
+
+    try:
+        # Cambiamos .table() por .from_() que es más estable en esta versión de la librería
+        respuesta = supabase.from_("videos").select("*").order("id").execute()
+        return respuesta.data
+    except Exception as e:
+        print(f"Error al cargar videos: {e}")
+        return []

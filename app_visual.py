@@ -1,4 +1,5 @@
 import streamlit as st
+from app.database import registrar_usuario, login_usuario, guardar_movimiento, obtener_movimientos, obtener_videos_educativos
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
@@ -45,7 +46,7 @@ if "usuario_conectado" not in st.session_state:
                 st.warning("Llena todos los campos.")
 
 # --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP REAL ---
-# --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP REAL ---
+
 else:
     # Capturamos los datos del usuario conectado
     user_id = st.session_state["usuario_conectado"]["id"]
@@ -184,30 +185,27 @@ else:
                     else:
                         st.error(msg)
 
-    # ==========================================
+
     # BOTÓN/OPCIÓN 2: EDUCACIÓN FINANCIERA
-    # ==========================================
     elif opcion_menu == "📚 Educación Financiera":
         st.header("📚 Academia Polibank")
         st.write("Aprende a manejar tu dinero como un profesional con nuestros videos cortos.")
 
         # Botón interno para ir al TikTok de la app
         st.subheader("📱 ¡Síguenos en nuestra comunidad!")
-        # Reemplaza el enlace por el link real de tu cuenta cuando lo crees
-        st.link_button("🎵 Ir al TikTok de Polibank", "https://www.tiktok.com/@polibank")
+        st.link_button("🎵 Ir al TikTok de Polibank", "https://www.tiktok.com/@polibank_?lang=es-419")
 
         st.write("---")
-
-        # Sección para los videos de YouTube
         st.subheader("📺 Videos Recomendados")
 
-        col_vid1, col_vid2 = st.columns(2)
+        # Llamamos a los videos reales que pusiste en Supabase
+        videos_db = obtener_videos_educativos()
 
-        with col_vid1:
-            st.markdown("**Clase 1: ¿Cómo empezar a ahorrar en la u?**")
-            # Aquí pones el link de YouTube de tu video cuando lo subas
-            st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-
-        with col_vid2:
-            st.markdown("**Clase 2: Evitando los gastos hormiga**")
-            st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        if len(videos_db) > 0:
+            columnas = st.columns(len(videos_db))
+            for i, video in enumerate(videos_db):
+                with columnas[i]:
+                    st.markdown(f"**{video['titulo']}**")
+                    st.video(video['url_youtube'])
+        else:
+            st.info("El administrador aún no ha subido videos informativos. ¡Vuelve pronto!")
