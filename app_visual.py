@@ -139,40 +139,65 @@ else:
     else:
         st.info("No hay transacciones registradas en tu cuenta permanente.")
 
-    # SECCIÓN 4: ACCIONES (GUARDADO DIRECTO A SUPABASE)
-    st.header("📥 Registrar Movimientos")
-    tab1, tab2 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
+        # SECCIÓN 4: ACCIONES (TUS FORMULARIOS + SECCIÓN EDUCATIVA)
+        st.header("📥 Explora Polibank")
 
-    fecha_actual_db = datetime.now().strftime("%Y-%m-%d")
+        # Añadimos la tercera pestaña para la Escuela Financiera
+        tab1, tab2, tab3 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA", "📚 Escuela Financiera"])
 
-    with tab1:
-        with st.form("form_ingreso", clear_on_submit=True):
-            monto_ingreso = st.number_input("Monto del Ingreso ($)", min_value=0.0, step=10.0)
-            bot_ingreso = st.form_submit_button("Guardar Ingreso")
-            if bot_ingreso and monto_ingreso > 0:
-                # Guardamos directo en Supabase
-                exito, msg = guardar_movimiento(user_id, "Ingreso", "Ingreso manual de dinero", monto_ingreso,
-                                                "INGRESOS", fecha_actual_db)
-                if exito:
-                    st.success(f"¡Ingreso de ${monto_ingreso} guardado en la nube!")
-                    st.rerun()
-                else:
-                    st.error(msg)
+        fecha_actual_db = datetime.now().strftime("%Y-%m-%d")
 
-    with tab2:
-        with st.form("form_gasto", clear_on_submit=True):
-            monto_gasto = st.number_input("Monto del Gasto ($)", min_value=0.0, step=1.0)
-            texto_gasto = st.text_input("¿En qué gastaste?", placeholder="Ej: un almuerzo en el comedor de la FCSH")
-            bot_gasto = st.form_submit_button("Procesar Gasto con IA")
+        with tab1:
+            with st.form("form_ingreso", clear_on_submit=True):
+                monto_ingreso = st.number_input("Monto del Ingreso ($)", min_value=0.0, step=10.0)
+                bot_ingreso = st.form_submit_button("Guardar Ingreso")
+                if bot_ingreso and monto_ingreso > 0:
+                    exito, msg = guardar_movimiento(user_id, "Ingreso", "Ingreso manual de dinero", monto_ingreso,
+                                                    "INGRESOS", fecha_actual_db)
+                    if exito:
+                        st.success(f"¡Ingreso de ${monto_ingreso} guardado en la nube!")
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
-            if bot_gasto and monto_gasto > 0 and texto_gasto:
-                with st.spinner("La IA de Polibank está clasificando tu gasto..."):
-                    categoria_ia = clasificar_gasto(texto_gasto)
-                    # Guardamos directo en Supabase
-                    exito, msg = guardar_movimiento(user_id, "Gasto", texto_gasto, monto_gasto, categoria_ia.upper(),
-                                                    fecha_actual_db)
-                if exito:
-                    st.success(f"Gasto guardado en la nube. Categoría IA: **{categoria_ia.upper()}**")
-                    st.rerun()
-                else:
-                    st.error(msg)
+        with tab2:
+            with st.form("form_gasto", clear_on_submit=True):
+                monto_gasto = st.number_input("Monto del Gasto ($)", min_value=0.0, step=1.0)
+                texto_gasto = st.text_input("¿En qué gastaste?", placeholder="Ej: un almuerzo en el comedor de la FCSH")
+                bot_gasto = st.form_submit_button("Procesar Gasto con IA")
+
+                if bot_gasto and monto_gasto > 0 and texto_gasto:
+                    with st.spinner("La IA de Polibank está clasificando tu gasto..."):
+                        categoria_ia = clasificar_gasto(texto_gasto)
+                        exito, msg = guardar_movimiento(user_id, "Gasto", texto_gasto, monto_gasto,
+                                                        categoria_ia.upper(), fecha_actual_db)
+                    if exito:
+                        st.success(f"Gasto guardado en la nube. Categoría IA: **{categoria_ia.upper()}**")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        # --- NUEVA PESTAÑA: EDUCACIÓN FINANCIERA ---
+        with tab3:
+            st.subheader("🎓 Polibank Academy")
+            st.write("Aprende a dominar tus finanzas con estos tutoriales rápidos de YouTube:")
+
+            # Creamos dos columnas para mostrar dos videos bonitos de prueba
+            col_vid1, col_vid2 = st.columns(2)
+
+            with col_vid1:
+                st.markdown("**💡 El método del ahorro inteligente**")
+                # Puedes cambiar este link de YouTube por el tuyo después
+                st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+            with col_vid2:
+                st.markdown("**📈 ¿Qué es el Interés Compuesto?**")
+                # Puedes cambiar este link de YouTube por el tuyo después
+                st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+            st.markdown("---")
+            st.write("📱 **¡Disfruta de más contenido interactivo en nuestra comunidad!**")
+
+            # Botón dinámico que abre tu TikTok en una pestaña nueva
+            # Recuerda cambiar 'https://www.tiktok.com/@tu_cuenta' por el link real de tu proyecto
+            st.link_button("🚀 Visitar nuestro TikTok Oficial", "https://www.tiktok.com/", use_container_width=True)
