@@ -45,11 +45,13 @@ if "usuario_conectado" not in st.session_state:
                 st.warning("Llena todos los campos.")
 
 # --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP REAL ---
+# --- SI EL USUARIO YA INICIÓ SESIÓN, ENTRA A TU APP REAL ---
 else:
     # Capturamos los datos del usuario conectado
     user_id = st.session_state["usuario_conectado"]["id"]
     correo_user = st.session_state["usuario_conectado"]["correo"]
 
+    # Cabecera de usuario y cerrar sesión
     col_user, col_logout = st.columns([4, 1])
     with col_user:
         st.write(f"👤 Conectado como: **{correo_user}**")
@@ -58,92 +60,97 @@ else:
             del st.session_state["usuario_conectado"]
             st.rerun()
 
-    # TRAEMOS LOS MOVIMIENTOS REALES DESDE SUPABASE
-    movimientos_db = obtener_movimientos(user_id)
+    st.write("---")
 
-    # Procesamos los datos reales para las métricas y gráficas
-    total_ingresos = 0.0
-    total_egresos = 0.0
-    historial_tabla = []
+    # --- MENÚ DE NAVEGACIÓN PRINCIPAL (BOTONES/OPCIONES) ---
+    # Usamos st.radio o st.sidebar para simular los botones grandes de navegación limpia
+    opcion_menu = st.sidebar.radio(
+        "📱 Navegación Polibank",
+        ["💰 Control de Ingresos y Gastos", "📚 Educación Financiera"]
+    )
 
-    for mov in movimientos_db:
-        monto_num = float(mov["monto"])
-        # Formateamos la fecha que viene de la BD (YYYY-MM-DD) a algo más amigable
-        fecha_dt = datetime.strptime(mov["fecha"], "%Y-%m-%d")
-        fecha_formateada = fecha_dt.strftime("%d-%b")
+    # ==========================================
+    # BOTÓN/OPCIÓN 1: INGRESOS Y GASTOS
+    # ==========================================
+    if opcion_menu == "💰 Control de Ingresos y Gastos":
 
-        if mov["tipo"] == "Ingreso":
-            total_ingresos += monto_num
-            tipo_emoji = "💰 Ingreso"
-            monto_texto = f"+${monto_num:.2f}"
+        # TRAEMOS LOS MOVIMIENTOS REALES DESDE SUPABASE
+        movimientos_db = obtener_movimientos(user_id)
+
+        # Procesamos los datos reales para las métricas y gráficas
+        total_ingresos = 0.0
+        total_egresos = 0.0
+        historial_tabla = []
+
+        for mov in movimientos_db:
+            monto_num = float(mov["monto"])
+            fecha_dt = datetime.strptime(mov["fecha"], "%Y-%m-%d")
+            fecha_formateada = fecha_dt.strftime("%d-%b")
+
+            if mov["tipo"] == "Ingreso":
+                total_ingresos += monto_num
+                tipo_emoji = "💰 Ingreso"
+                monto_texto = f"+${monto_num:.2f}"
+            else:
+                total_egresos += monto_num
+                tipo_emoji = "🛒 Gasto"
+                monto_texto = f"-${monto_num:.2f}"
+
+            historial_tabla.append({
+                "Fecha": fecha_formateada,
+                "Tipo": tipo_emoji,
+                "Detalle": mov["detalle"],
+                "Categoría": mov["categoria"].upper(),
+                "Monto ($)": monto_texto
+            })
+
+        balance = total_ingresos - total_egresos
+
+        # SECCIÓN 1: BALANCE GENERAL
+        st.header("📊 Resumen de tu Cuenta")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Ingresos", f"${total_ingresos:.2f}")
+        col2.metric("Total Gastos", f"${total_egresos:.2f}")
+        col3.metric("Saldo Disponible", f"${balance:.2f}")
+
+        # SECCIÓN 2: GRÁFICA COMPARATIVA DIARIA
+        st.subheader("📊 Comparativa Total: Ingresos vs Egresos")
+        if total_ingresos > 0 or total_egresos > 0:
+            data_grafico = {
+                "Monto ($)": [total_ingresos, total_egresos],
+                "Tipo": ["Ingresos", "Egresos"]
+            }
+            df = pd.DataFrame(data_grafico)
+            fig = px.bar(
+                df,
+                x=[-0.12, 0.12],
+                y="Monto ($)",
+                color="Tipo",
+                color_discrete_map={"Ingresos": "#0052cc", "Egresos": "#ff0000"}
+            )
+            fig.update_traces(width=0.24)
+            fig.update_layout(
+                bargap=0.0,
+                xaxis=dict(tickvals=[0], ticktext=["Histórico"], range=[-1, 1]),
+                xaxis_title=None,
+                width=500,
+                height=400
+            )
+            st.plotly_chart(fig)
         else:
-            total_egresos += monto_num
-            tipo_emoji = "🛒 Gasto"
-            monto_texto = f"-${monto_num:.2f}"
+            st.info("Aún no tienes movimientos guardados en tu cuenta. ¡Agrega uno abajo para activar el gráfico!")
 
-        historial_tabla.append({
-            "Fecha": fecha_formateada,
-            "Tipo": tipo_emoji,
-            "Detalle": mov["detalle"],
-            "Categoría": mov["categoria"].upper(),
-            "Monto ($)": monto_texto
-        })
+        # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS REALES
+        st.header("📜 Historial de Actividad (Base de Datos)")
+        if len(historial_tabla) > 0:
+            df_historial = pd.DataFrame(historial_tabla)
+            st.dataframe(df_historial, use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay transacciones registradas en tu cuenta permanente.")
 
-    balance = total_ingresos - total_egresos
-
-    # SECCIÓN 1: BALANCE GENERAL
-    st.header("📊 Resumen de tu Cuenta")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Ingresos", f"${total_ingresos:.2f}")
-    col2.metric("Total Gastos", f"${total_egresos:.2f}")
-    col3.metric("Saldo Disponible", f"${balance:.2f}")
-
-    # SECCIÓN 2: GRÁFICA COMPARATIVA DIARIA
-    st.subheader("📊 Comparativa Total: Ingresos vs Egresos")
-    fecha_hoy = datetime.now().strftime("%d-%b")
-
-    if total_ingresos > 0 or total_egresos > 0:
-        data_grafico = {
-            "Monto ($)": [total_ingresos, total_egresos],
-            "Tipo": ["Ingresos", "Egresos"]
-        }
-        df = pd.DataFrame(data_grafico)
-        fig = px.bar(
-            df,
-            x=[-0.12, 0.12],
-            y="Monto ($)",
-            color="Tipo",
-            color_discrete_map={"Ingresos": "#0052cc", "Egresos": "#ff0000"}
-        )
-        fig.update_traces(width=0.24)
-        fig.update_layout(
-            bargap=0.0,
-            xaxis=dict(
-                tickvals=[0],
-                ticktext=["Histórico"],
-                range=[-1, 1]
-            ),
-            xaxis_title=None,
-            width=500,
-            height=400
-        )
-        st.plotly_chart(fig)
-    else:
-        st.info("Aún no tienes movimientos guardados en tu cuenta. ¡Agrega uno abajo para activar el gráfico!")
-
-    # SECCIÓN 3: HISTORIAL DE MOVIMIENTOS REALES
-    st.header("📜 Historial de Actividad (Base de Datos)")
-    if len(historial_tabla) > 0:
-        df_historial = pd.DataFrame(historial_tabla)
-        st.dataframe(df_historial, use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay transacciones registradas en tu cuenta permanente.")
-
-        # SECCIÓN 4: ACCIONES (TUS FORMULARIOS + SECCIÓN EDUCATIVA)
-        st.header("📥 Explora Polibank")
-
-        # Añadimos la tercera pestaña para la Escuela Financiera
-        tab1, tab2, tab3 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA", "📚 Escuela Financiera"])
+        # SECCIÓN 4: ACCIONES (GUARDADO DIRECTO A SUPABASE)
+        st.header("📥 Registrar Movimientos")
+        tab1, tab2 = st.tabs(["💰 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
 
         fecha_actual_db = datetime.now().strftime("%Y-%m-%d")
 
@@ -177,27 +184,30 @@ else:
                     else:
                         st.error(msg)
 
-        # --- NUEVA PESTAÑA: EDUCACIÓN FINANCIERA ---
-        with tab3:
-            st.subheader("🎓 Polibank Academy")
-            st.write("Aprende a dominar tus finanzas con estos tutoriales rápidos de YouTube:")
+    # ==========================================
+    # BOTÓN/OPCIÓN 2: EDUCACIÓN FINANCIERA
+    # ==========================================
+    elif opcion_menu == "📚 Educación Financiera":
+        st.header("📚 Academia Polibank")
+        st.write("Aprende a manejar tu dinero como un profesional con nuestros videos cortos.")
 
-            # Creamos dos columnas para mostrar dos videos bonitos de prueba
-            col_vid1, col_vid2 = st.columns(2)
+        # Botón interno para ir al TikTok de la app
+        st.subheader("📱 ¡Síguenos en nuestra comunidad!")
+        # Reemplaza el enlace por el link real de tu cuenta cuando lo crees
+        st.link_button("🎵 Ir al TikTok de Polibank", "https://www.tiktok.com/@polibank")
 
-            with col_vid1:
-                st.markdown("**💡 El método del ahorro inteligente**")
-                # Puedes cambiar este link de YouTube por el tuyo después
-                st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        st.write("---")
 
-            with col_vid2:
-                st.markdown("**📈 ¿Qué es el Interés Compuesto?**")
-                # Puedes cambiar este link de YouTube por el tuyo después
-                st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        # Sección para los videos de YouTube
+        st.subheader("📺 Videos Recomendados")
 
-            st.markdown("---")
-            st.write("📱 **¡Disfruta de más contenido interactivo en nuestra comunidad!**")
+        col_vid1, col_vid2 = st.columns(2)
 
-            # Botón dinámico que abre tu TikTok en una pestaña nueva
-            # Recuerda cambiar 'https://www.tiktok.com/@tu_cuenta' por el link real de tu proyecto
-            st.link_button("🚀 Visitar nuestro TikTok Oficial", "https://www.tiktok.com/", use_container_width=True)
+        with col_vid1:
+            st.markdown("**Clase 1: ¿Cómo empezar a ahorrar en la u?**")
+            # Aquí pones el link de YouTube de tu video cuando lo subas
+            st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        with col_vid2:
+            st.markdown("**Clase 2: Evitando los gastos hormiga**")
+            st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
