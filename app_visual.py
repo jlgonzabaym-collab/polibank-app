@@ -12,6 +12,8 @@ from app.ai_core import clasificar_gasto
 from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
+import json
+from streamlit_cookies_manager import EncryptedCookieManager
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -25,6 +27,11 @@ COLOR_AZUL        = "#2E86AB"
 COLOR_ORO         = "#F39C12"
 
 supabase_client = create_client(SUPABASE_URL.strip().rstrip('/'), SUPABASE_KEY.strip())
+
+# ── COOKIES para mantener sesión al refrescar
+cookies = EncryptedCookieManager(prefix="polibank_", password="polibank_espol_2024_secret")
+if not cookies.ready():
+    st.stop()
 
 st.markdown(f"""
 <style>
@@ -147,6 +154,14 @@ with col_logo:
 with col_titulo:
     st.title("Polibank · ESPOL")
 
+# ── Restaurar sesión desde cookie si existe
+if "usuario_conectado" not in st.session_state:
+    cookie_usuario = cookies.get("usuario")
+    if cookie_usuario:
+        try:
+            st.session_state["usuario_conectado"] = json.loads(cookie_usuario)
+        except Exception:
+            pass
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
@@ -163,6 +178,8 @@ if "usuario_conectado" not in st.session_state:
                 exito, resultado = login_usuario(correo_login, pass_login)
                 if exito:
                     st.session_state["usuario_conectado"] = resultado
+                    cookies["usuario"] = json.dumps(resultado)
+                    cookies.save()
                     registrar_accion(resultado["id"], "login")
                     st.rerun()
                 else:
@@ -198,6 +215,8 @@ else:
     with col_logout:
         if st.button("Salir ❌", use_container_width=True):
             del st.session_state["usuario_conectado"]
+            cookies["usuario"] = ""
+            cookies.save()
             st.rerun()
 
     st.divider()
