@@ -4,10 +4,10 @@ from app.database import (
     guardar_movimiento, obtener_movimientos,
     obtener_videos_educativos, eliminar_movimiento
 )
+from app.gamificacion import registrar_accion, obtener_estado, BADGES
 from datetime import datetime, date
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from app.ai_core import clasificar_gasto
 
 # ─────────────────────────────────────────────
@@ -15,44 +15,30 @@ from app.ai_core import clasificar_gasto
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Polibank", page_icon="🐢", layout="centered")
 
-# Colores de marca
-COLOR_VERDE      = "#1B8A4C"
+COLOR_VERDE       = "#1B8A4C"
 COLOR_VERDE_CLARO = "#27AE60"
-COLOR_ROJO       = "#E74C3C"
-COLOR_AZUL       = "#2E86AB"
-COLOR_FONDO      = "#F4F6F9"
+COLOR_ROJO        = "#E74C3C"
+COLOR_AZUL        = "#2E86AB"
+COLOR_ORO         = "#F39C12"
 
-# CSS global: tarjetas, badges de categoría, tabla más limpia
 st.markdown(f"""
 <style>
   .block-container {{ padding-top: 1.5rem; }}
 
-  /* Tarjeta métrica */
   .metric-card {{
-    background: white;
-    border-radius: 12px;
-    padding: 18px 16px;
-    text-align: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    background: white; border-radius: 12px; padding: 18px 16px;
+    text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     border-left: 4px solid {COLOR_VERDE};
   }}
-  .metric-card.rojo  {{ border-left-color: {COLOR_ROJO}; }}
-  .metric-card.azul  {{ border-left-color: {COLOR_AZUL}; }}
-  .metric-label {{ font-size: 0.78rem; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }}
-  .metric-value {{ font-size: 1.6rem; font-weight: 800; color: #1a1a1a; }}
-  .metric-value.verde {{ color: {COLOR_VERDE}; }}
-  .metric-value.rojo  {{ color: {COLOR_ROJO};  }}
-  .metric-value.azul  {{ color: {COLOR_AZUL};  }}
+  .metric-card.rojo {{ border-left-color: {COLOR_ROJO}; }}
+  .metric-card.azul {{ border-left-color: {COLOR_AZUL}; }}
+  .metric-label {{ font-size:0.78rem; color:#666; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }}
+  .metric-value {{ font-size:1.6rem; font-weight:800; color:#1a1a1a; }}
+  .metric-value.verde {{ color:{COLOR_VERDE}; }}
+  .metric-value.rojo  {{ color:{COLOR_ROJO};  }}
+  .metric-value.azul  {{ color:{COLOR_AZUL};  }}
 
-  /* Badge de categoría */
-  .badge {{
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 20px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: .3px;
-  }}
+  .badge-cat {{ display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }}
   .badge-comida     {{ background:#FFF3CD; color:#856404; }}
   .badge-transporte {{ background:#D1ECF1; color:#0C5460; }}
   .badge-estudios   {{ background:#D4EDDA; color:#155724; }}
@@ -60,41 +46,73 @@ st.markdown(f"""
   .badge-otros      {{ background:#E2E3E5; color:#383D41; }}
   .badge-ingresos   {{ background:#D4EDDA; color:#155724; }}
 
-  /* Aviso de saldo negativo */
   .alerta-negativo {{
-    background: #FFF3CD; border-left: 4px solid #FFC107;
-    border-radius: 8px; padding: 12px 16px; margin: 12px 0;
-    font-weight: 600; color: #856404;
+    background:#FFF3CD; border-left:4px solid #FFC107; border-radius:8px;
+    padding:12px 16px; margin:12px 0; font-weight:600; color:#856404;
+  }}
+  .tip-box {{
+    background:#EAF6EE; border-left:4px solid {COLOR_VERDE}; border-radius:8px;
+    padding:12px 16px; margin:10px 0; font-size:0.88rem; color:#1a5c34;
   }}
 
-  /* Tip financiero */
-  .tip-box {{
-    background: #EAF6EE; border-left: 4px solid {COLOR_VERDE};
-    border-radius: 8px; padding: 12px 16px; margin: 10px 0;
-    font-size: 0.88rem; color: #1a5c34;
+  /* GAMIFICACIÓN */
+  .gami-hero {{
+    background: linear-gradient(135deg, #1B8A4C, #27AE60);
+    border-radius: 16px; padding: 24px; color: white; margin-bottom: 20px;
+  }}
+  .gami-stat-grid {{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;
+  }}
+  .gami-stat {{
+    background: white; border-radius: 10px; padding: 14px;
+    text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }}
+  .gami-stat-val {{ font-size: 1.9rem; font-weight: 800; line-height: 1.1; }}
+  .gami-stat-lbl {{ font-size: 0.72rem; color: #888; font-weight: 600; text-transform: uppercase; margin-top: 4px; }}
+  .xp-bar-wrap {{
+    background: rgba(255,255,255,0.25); border-radius: 20px; height: 10px;
+    margin: 10px 0 6px; overflow: hidden;
+  }}
+  .xp-bar-fill {{ height: 10px; border-radius: 20px; background: white; }}
+  .nivel-pill {{
+    display: inline-block; background: rgba(255,255,255,0.2); border-radius: 20px;
+    padding: 3px 14px; font-size: 0.8rem; font-weight: 700; margin-left: 10px;
+  }}
+  .badge-grid {{
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 12px;
+  }}
+  .badge-card {{
+    background: white; border-radius: 12px; padding: 14px 10px;
+    text-align: center; border: 2px solid #e8e8e8;
+  }}
+  .badge-card.desbloqueado {{ border-color: {COLOR_VERDE}; background: #f0faf4; }}
+  .badge-card.bloqueado    {{ opacity: 0.4; }}
+  .badge-emoji  {{ font-size: 2rem; margin-bottom: 6px; }}
+  .badge-nombre {{ font-size: 0.78rem; font-weight: 700; color: #333; }}
+  .badge-desc   {{ font-size: 0.66rem; color: #888; margin-top: 3px; }}
+  .toast-nuevo {{
+    background: {COLOR_VERDE}; color: white; border-radius: 10px;
+    padding: 12px 18px; margin: 6px 0; font-weight: 700; font-size: 0.95rem;
+  }}
+  .sidebar-gami {{
+    background:#f0faf4; border-radius:10px; padding:12px; text-align:center;
+    margin-bottom:16px; border: 1px solid #c3e6cb;
   }}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# HELPER: badge de categoría
-# ─────────────────────────────────────────────
 EMOJI_CAT = {
-    "COMIDA": "🍽️", "TRANSPORTE": "🚌", "ESTUDIOS": "📚",
-    "DIVERSION": "🎮", "OTROS": "📦", "INGRESOS": "💵",
-    "DIVERSION": "🎮"
+    "COMIDA":"🍽️", "TRANSPORTE":"🚌", "ESTUDIOS":"📚",
+    "DIVERSION":"🎮", "OTROS":"📦", "INGRESOS":"💵"
 }
 
-def badge(categoria: str) -> str:
+def badge_cat(categoria: str) -> str:
     cat = categoria.upper()
-    cls = f"badge-{cat.lower()}"
-    emoji = EMOJI_CAT.get(cat, "📦")
-    return f'<span class="badge {cls}">{emoji} {cat}</span>'
+    return f'<span class="badge-cat badge-{cat.lower()}">{EMOJI_CAT.get(cat,"📦")} {cat}</span>'
 
 
 # ─────────────────────────────────────────────
-# CABECERA SIEMPRE VISIBLE
+# CABECERA
 # ─────────────────────────────────────────────
 col_logo, col_titulo = st.columns([1, 5], vertical_alignment="center")
 with col_logo:
@@ -104,7 +122,7 @@ with col_titulo:
 
 
 # ═══════════════════════════════════════════════
-# BLOQUE A: PANTALLA DE LOGIN / REGISTRO
+# BLOQUE A: LOGIN / REGISTRO
 # ═══════════════════════════════════════════════
 if "usuario_conectado" not in st.session_state:
 
@@ -119,6 +137,7 @@ if "usuario_conectado" not in st.session_state:
                 exito, resultado = login_usuario(correo_login, pass_login)
                 if exito:
                     st.session_state["usuario_conectado"] = resultado
+                    registrar_accion(resultado["id"], "login")
                     st.rerun()
                 else:
                     st.error(resultado)
@@ -144,13 +163,12 @@ if "usuario_conectado" not in st.session_state:
 
 
 # ═══════════════════════════════════════════════
-# BLOQUE B: APP PRINCIPAL (usuario autenticado)
+# BLOQUE B: APP PRINCIPAL
 # ═══════════════════════════════════════════════
 else:
     user_id     = st.session_state["usuario_conectado"]["id"]
     correo_user = st.session_state["usuario_conectado"]["correo"]
 
-    # Barra superior
     col_user, col_logout = st.columns([4, 1])
     with col_user:
         st.caption(f"👤 {correo_user}")
@@ -161,11 +179,33 @@ else:
 
     st.divider()
 
-    # Menú lateral
+    # Mini widget de progreso en sidebar
+    gami = obtener_estado(user_id)
+    racha_emoji = "🔥" if gami["racha_viva"] else "💤"
+    st.sidebar.markdown(f"""
+    <div class="sidebar-gami">
+      <div style="font-size:0.7rem; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:.5px;">Tu progreso</div>
+      <div style="font-size:1.6rem; font-weight:800; color:#1B8A4C; margin:4px 0;">{racha_emoji} {gami['racha_actual']} días</div>
+      <div style="font-size:0.75rem; color:#888;">⭐ {gami['xp_total']} XP · Nivel {gami['nivel']} {gami['nivel_nombre']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     opcion_menu = st.sidebar.radio(
         "📱 Menú Polibank",
-        ["💰 Finanzas Personales", "📚 Academia Financiera"]
+        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera"]
     )
+
+    # Mostrar badges nuevos si los hay
+    if "gami_notif" in st.session_state:
+        notif = st.session_state.pop("gami_notif")
+        for b in notif.get("badges_nuevos", []):
+            info = BADGES.get(b, {})
+            st.markdown(
+                f'<div class="toast-nuevo">🏅 ¡Nuevo logro! {info.get("emoji","")} '
+                f'<strong>{info.get("nombre","")}</strong> — {info.get("desc","")}</div>',
+                unsafe_allow_html=True
+            )
+
 
     # ══════════════════════════════════════════
     # SECCIÓN 1: FINANZAS PERSONALES
@@ -174,12 +214,11 @@ else:
 
         movimientos_db = obtener_movimientos(user_id)
 
-        # ── Calcular totales y series
         total_ingresos = 0.0
         total_egresos  = 0.0
         historial_tabla = []
         datos_por_dia   = {}
-        cat_totales     = {"COMIDA": 0.0, "TRANSPORTE": 0.0, "ESTUDIOS": 0.0, "DIVERSION": 0.0, "OTROS": 0.0}
+        cat_totales     = {"COMIDA":0.0,"TRANSPORTE":0.0,"ESTUDIOS":0.0,"DIVERSION":0.0,"OTROS":0.0}
 
         for mov in movimientos_db:
             monto_num   = float(mov["monto"])
@@ -187,206 +226,147 @@ else:
             fecha_label = fecha_dt.strftime("%d-%b")
 
             if fecha_label not in datos_por_dia:
-                datos_por_dia[fecha_label] = {"Ingresos": 0.0, "Egresos": 0.0, "_orden": fecha_dt}
+                datos_por_dia[fecha_label] = {"Ingresos":0.0, "Egresos":0.0, "_orden":fecha_dt}
 
             cat = mov.get("categoria", "OTROS").upper()
 
             if mov["tipo"] == "Ingreso":
                 total_ingresos += monto_num
                 datos_por_dia[fecha_label]["Ingresos"] += monto_num
-                tipo_label  = "💵 Ingreso"
+                tipo_label = "💵 Ingreso"
                 monto_texto = f"+${monto_num:.2f}"
             else:
                 total_egresos += monto_num
                 datos_por_dia[fecha_label]["Egresos"] += monto_num
-                tipo_label  = "🛒 Gasto"
+                tipo_label = "🛒 Gasto"
                 monto_texto = f"-${monto_num:.2f}"
-                key_cat = cat if cat in cat_totales else "OTROS"
-                cat_totales[key_cat] += monto_num
+                cat_totales[cat if cat in cat_totales else "OTROS"] += monto_num
 
             historial_tabla.append({
-                "Fecha":     fecha_label,
-                "Tipo":      tipo_label,
-                "Detalle":   mov["detalle"],
-                "Categoría": cat,
-                "Monto ($)": monto_texto,
-                "_id":       mov.get("id"),
-                "_fecha_dt": fecha_dt
+                "Fecha": fecha_label, "Tipo": tipo_label, "Detalle": mov["detalle"],
+                "Categoría": cat, "Monto ($)": monto_texto,
+                "_id": mov.get("id"), "_fecha_dt": fecha_dt
             })
 
         balance = total_ingresos - total_egresos
 
-        # ── MÉTRICAS (tarjetas custom)
+        # Métricas
         st.subheader("📊 Resumen de tu Cuenta")
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown(f"""
-            <div class="metric-card">
-              <div class="metric-label">Total Ingresos</div>
-              <div class="metric-value verde">${total_ingresos:,.2f}</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card"><div class="metric-label">Ingresos</div><div class="metric-value verde">${total_ingresos:,.2f}</div></div>', unsafe_allow_html=True)
         with c2:
-            st.markdown(f"""
-            <div class="metric-card rojo">
-              <div class="metric-label">Total Gastos</div>
-              <div class="metric-value rojo">${total_egresos:,.2f}</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card rojo"><div class="metric-label">Gastos</div><div class="metric-value rojo">${total_egresos:,.2f}</div></div>', unsafe_allow_html=True)
         with c3:
             color_bal = "verde" if balance >= 0 else "rojo"
-            st.markdown(f"""
-            <div class="metric-card azul">
-              <div class="metric-label">Saldo Disponible</div>
-              <div class="metric-value {color_bal}">${balance:,.2f}</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card azul"><div class="metric-label">Saldo</div><div class="metric-value {color_bal}">${balance:,.2f}</div></div>', unsafe_allow_html=True)
 
-        # Alerta si el saldo es negativo
         if balance < 0:
-            st.markdown(f"""
-            <div class="alerta-negativo">
-              ⚠️ Tu saldo está en negativo (${balance:,.2f}). Revisa tus gastos y considera reducir la categoría
-              con mayor consumo.
-            </div>""", unsafe_allow_html=True)
+            st.markdown('<div class="alerta-negativo">⚠️ Tu saldo está en negativo. Revisa tus gastos.</div>', unsafe_allow_html=True)
 
-        # Tip financiero dinámico
-        if total_egresos > 0 and total_ingresos > 0:
-            pct_ahorro = ((total_ingresos - total_egresos) / total_ingresos) * 100
-            if pct_ahorro >= 20:
-                tip = f"🎉 ¡Excelente! Estás ahorrando el {pct_ahorro:.0f}% de tus ingresos. ¡Sigue así!"
-            elif pct_ahorro > 0:
-                tip = f"💡 Estás ahorrando el {pct_ahorro:.0f}% de tus ingresos. La meta recomendada es el 20%."
-            else:
-                tip = "📉 Estás gastando más de lo que ganas. Intenta identificar gastos no esenciales."
+        if total_ingresos > 0 and total_egresos > 0:
+            pct = ((total_ingresos - total_egresos) / total_ingresos) * 100
+            if pct >= 20:   tip = f"🎉 Estás ahorrando el {pct:.0f}% de tus ingresos. ¡Excelente!"
+            elif pct > 0:   tip = f"💡 Ahorras el {pct:.0f}%. La meta recomendada es el 20%."
+            else:           tip = "📉 Gastas más de lo que ganas. Identifica gastos no esenciales."
             st.markdown(f'<div class="tip-box">{tip}</div>', unsafe_allow_html=True)
 
         st.write("")
 
-        # ── GRÁFICAS (tabs para no apilar)
-        if len(datos_por_dia) > 0:
-            tab_barras, tab_pie, tab_linea = st.tabs(
-                ["📊 Ingresos vs Gastos", "🥧 Gastos por Categoría", "📈 Tendencia de Saldo"]
-            )
-
-            # Ordenamos el diccionario por fecha real
-            dias_ordenados = sorted(datos_por_dia.items(), key=lambda x: x[1]["_orden"])
+        # Gráficas
+        if datos_por_dia:
+            tab_barras, tab_pie, tab_linea = st.tabs(["📊 Ingresos vs Gastos", "🥧 Por Categoría", "📈 Saldo Acumulado"])
+            dias_ord = sorted(datos_por_dia.items(), key=lambda x: x[1]["_orden"])
 
             with tab_barras:
                 filas = []
-                for fecha_lbl, montos in dias_ordenados:
-                    filas.append({"Fecha": fecha_lbl, "Monto ($)": montos["Ingresos"], "Tipo": "Ingresos"})
-                    filas.append({"Fecha": fecha_lbl, "Monto ($)": montos["Egresos"],  "Tipo": "Egresos"})
-                df_bar = pd.DataFrame(filas)
-                fig_bar = px.bar(
-                    df_bar, x="Fecha", y="Monto ($)", color="Tipo", barmode="group",
-                    color_discrete_map={"Ingresos": COLOR_VERDE_CLARO, "Egresos": COLOR_ROJO},
-                    text_auto='.2f'
-                )
-                fig_bar.update_layout(height=380, xaxis_title="Día", yaxis_title="Monto ($)",
-                                      legend_title="Tipo", plot_bgcolor="white")
-                st.plotly_chart(fig_bar, use_container_width=True)
+                for fl, m in dias_ord:
+                    filas += [{"Fecha":fl,"Monto ($)":m["Ingresos"],"Tipo":"Ingresos"},
+                               {"Fecha":fl,"Monto ($)":m["Egresos"], "Tipo":"Egresos"}]
+                fig = px.bar(pd.DataFrame(filas), x="Fecha", y="Monto ($)", color="Tipo",
+                             barmode="group", text_auto='.2f',
+                             color_discrete_map={"Ingresos":COLOR_VERDE_CLARO,"Egresos":COLOR_ROJO})
+                fig.update_layout(height=360, plot_bgcolor="white")
+                st.plotly_chart(fig, use_container_width=True)
 
             with tab_pie:
-                # Solo categorías con gasto > 0
-                cat_filtradas = {k: v for k, v in cat_totales.items() if v > 0}
-                if cat_filtradas:
-                    fig_pie = px.pie(
-                        values=list(cat_filtradas.values()),
-                        names=list(cat_filtradas.keys()),
-                        color_discrete_sequence=px.colors.qualitative.Set2,
-                        hole=0.38
-                    )
-                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(height=360, showlegend=True)
-                    st.plotly_chart(fig_pie, use_container_width=True)
-
-                    # Categoría con mayor gasto
-                    cat_max = max(cat_filtradas, key=cat_filtradas.get)
-                    st.markdown(
-                        f'<div class="tip-box">💡 Tu mayor gasto es en <strong>{cat_max}</strong> '
-                        f'(${cat_filtradas[cat_max]:,.2f}). ¿Puedes reducirlo?</div>',
-                        unsafe_allow_html=True
-                    )
+                cat_f = {k:v for k,v in cat_totales.items() if v > 0}
+                if cat_f:
+                    fig2 = px.pie(values=list(cat_f.values()), names=list(cat_f.keys()),
+                                  color_discrete_sequence=px.colors.qualitative.Set2, hole=0.38)
+                    fig2.update_traces(textposition='inside', textinfo='percent+label')
+                    fig2.update_layout(height=340)
+                    st.plotly_chart(fig2, use_container_width=True)
+                    cat_max = max(cat_f, key=cat_f.get)
+                    st.markdown(f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>', unsafe_allow_html=True)
                 else:
-                    st.info("Aún no hay gastos para mostrar por categoría.")
+                    st.info("Aún no hay gastos para mostrar.")
 
             with tab_linea:
-                # Línea de saldo acumulado día a día
                 saldo_acum = 0.0
                 puntos = []
-                for fecha_lbl, montos in dias_ordenados:
-                    saldo_acum += montos["Ingresos"] - montos["Egresos"]
-                    puntos.append({"Fecha": fecha_lbl, "Saldo ($)": saldo_acum})
-                df_linea = pd.DataFrame(puntos)
-                fig_linea = px.line(
-                    df_linea, x="Fecha", y="Saldo ($)",
-                    markers=True,
-                    color_discrete_sequence=[COLOR_AZUL]
-                )
-                fig_linea.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.5)
-                fig_linea.update_layout(height=360, plot_bgcolor="white",
-                                        xaxis_title="Día", yaxis_title="Saldo acumulado ($)")
-                st.plotly_chart(fig_linea, use_container_width=True)
+                for fl, m in dias_ord:
+                    saldo_acum += m["Ingresos"] - m["Egresos"]
+                    puntos.append({"Fecha":fl,"Saldo ($)":saldo_acum})
+                fig3 = px.line(pd.DataFrame(puntos), x="Fecha", y="Saldo ($)", markers=True,
+                               color_discrete_sequence=[COLOR_AZUL])
+                fig3.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.5)
+                fig3.update_layout(height=340, plot_bgcolor="white")
+                st.plotly_chart(fig3, use_container_width=True)
         else:
-            st.info("⬇️ Aún no tienes movimientos. ¡Agrega uno abajo para activar las gráficas!")
+            st.info("⬇️ Aún no tienes movimientos. ¡Agrega uno abajo!")
 
         st.divider()
 
-        # ── HISTORIAL DE MOVIMIENTOS
+        # Historial
         st.subheader("🗒️ Historial de Movimientos")
-
         if historial_tabla:
-            # Ordenar por fecha más reciente primero
             historial_tabla.sort(key=lambda x: x["_fecha_dt"], reverse=True)
-
-            # Filtro por tipo
-            filtro = st.selectbox("Filtrar por tipo:", ["Todos", "💵 Ingreso", "🛒 Gasto"], key="filtro_hist")
-            lista_filtrada = [m for m in historial_tabla if filtro == "Todos" or m["Tipo"] == filtro]
-
-            if lista_filtrada:
-                for mov in lista_filtrada:
-                    col_info, col_del = st.columns([10, 1])
-                    with col_info:
-                        es_ingreso = mov["Tipo"] == "💵 Ingreso"
-                        color_monto = COLOR_VERDE if es_ingreso else COLOR_ROJO
-                        st.markdown(
-                            f"**{mov['Fecha']}** · {badge(mov['Categoría'])} "
-                            f"&nbsp;{mov['Detalle']}&nbsp; "
-                            f"<span style='color:{color_monto}; font-weight:800'>{mov['Monto ($)']}</span>",
-                            unsafe_allow_html=True
-                        )
-                    with col_del:
-                        if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}", help="Eliminar"):
-                            ok, _ = eliminar_movimiento(mov["_id"])
-                            if ok:
-                                st.rerun()
-            else:
-                st.write("No hay movimientos con ese filtro.")
+            filtro = st.selectbox("Filtrar:", ["Todos", "💵 Ingreso", "🛒 Gasto"], key="filtro_hist")
+            lista = [m for m in historial_tabla if filtro == "Todos" or m["Tipo"] == filtro]
+            for mov in lista:
+                c_inf, c_del = st.columns([10, 1])
+                with c_inf:
+                    color_m = COLOR_VERDE if mov["Tipo"] == "💵 Ingreso" else COLOR_ROJO
+                    st.markdown(
+                        f"**{mov['Fecha']}** · {badge_cat(mov['Categoría'])} &nbsp;"
+                        f"{mov['Detalle']} &nbsp;"
+                        f"<span style='color:{color_m};font-weight:800'>{mov['Monto ($)']}</span>",
+                        unsafe_allow_html=True
+                    )
+                with c_del:
+                    if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
+                        ok, _ = eliminar_movimiento(mov["_id"])
+                        if ok:
+                            st.rerun()
         else:
-            st.write("No hay transacciones registradas aún.")
+            st.write("No hay transacciones registradas.")
 
         st.divider()
 
-        # ── REGISTRAR MOVIMIENTOS
+        # Registrar movimientos
         st.subheader("➕ Registrar Movimiento")
-        tab_ing, tab_gas = st.tabs(["💵 Registrar Ingreso", "🛒 Registrar Gasto con IA"])
+        tab_ing, tab_gas = st.tabs(["💵 Ingreso", "🛒 Gasto con IA"])
 
         with tab_ing:
             with st.form("form_ingreso", clear_on_submit=True):
-                monto_ingreso  = st.number_input("Monto ($)", min_value=0.01, step=10.0)
-                fuente_ingreso = st.text_input(
-                    "Fuente del ingreso",
-                    placeholder="Ej: Beca ESPOL, Trabajo freelance, Mesada mensual…"
-                )
-                fecha_ingreso  = st.date_input("Fecha", value=date.today())
+                monto_ing  = st.number_input("Monto ($)", min_value=0.01, step=10.0)
+                fuente_ing = st.text_input("Fuente", placeholder="Beca ESPOL, Trabajo, Mesada…")
+                fecha_ing  = st.date_input("Fecha", value=date.today())
                 if st.form_submit_button("💾 Guardar Ingreso", use_container_width=True):
-                    if monto_ingreso > 0:
-                        detalle = fuente_ingreso.strip() or "Ingreso manual"
+                    if monto_ing > 0:
                         exito, msg = guardar_movimiento(
-                            user_id, "Ingreso", detalle,
-                            monto_ingreso, "INGRESOS",
-                            fecha_ingreso.strftime("%Y-%m-%d")
+                            user_id, "Ingreso",
+                            fuente_ing.strip() or "Ingreso manual",
+                            monto_ing, "INGRESOS",
+                            fecha_ing.strftime("%Y-%m-%d")
                         )
                         if exito:
-                            st.success(f"✅ Ingreso de ${monto_ingreso:.2f} guardado correctamente.")
+                            res_gami = registrar_accion(user_id, "ingreso", {
+                                "_saldo_positivo": (total_ingresos + monto_ing - total_egresos) > 0
+                            })
+                            st.session_state["gami_notif"] = res_gami
+                            st.success(f"✅ Ingreso de ${monto_ing:.2f} guardado · +{res_gami['xp_ganado']} XP ⭐")
                             st.rerun()
                         else:
                             st.error(msg)
@@ -395,67 +375,160 @@ else:
 
         with tab_gas:
             with st.form("form_gasto", clear_on_submit=True):
-                monto_gasto = st.number_input("Monto ($)", min_value=0.01, step=1.0)
-                texto_gasto = st.text_input(
-                    "¿En qué gastaste?",
-                    placeholder="Ej: Almuerzo en el comedor FCSH, Bus de Guayaquil a Samborondón…"
-                )
-                fecha_gasto = st.date_input("Fecha", value=date.today())
+                monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
+                texto_gas = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
+                fecha_gas = st.date_input("Fecha", value=date.today())
                 if st.form_submit_button("🤖 Clasificar con IA y Guardar", use_container_width=True):
-                    if monto_gasto > 0 and texto_gasto.strip():
-                        with st.spinner("La IA de Polibank está clasificando tu gasto…"):
-                            categoria_ia = clasificar_gasto(texto_gasto)
-                            exito, msg   = guardar_movimiento(
-                                user_id, "Gasto", texto_gasto,
-                                monto_gasto, categoria_ia.upper(),
-                                fecha_gasto.strftime("%Y-%m-%d")
+                    if monto_gas > 0 and texto_gas.strip():
+                        with st.spinner("Clasificando con IA…"):
+                            cat_ia = clasificar_gasto(texto_gas)
+                            exito, msg = guardar_movimiento(
+                                user_id, "Gasto", texto_gas,
+                                monto_gas, cat_ia.upper(),
+                                fecha_gas.strftime("%Y-%m-%d")
                             )
                         if exito:
+                            res_gami = registrar_accion(user_id, "gasto")
+                            st.session_state["gami_notif"] = res_gami
                             st.success(
-                                f"✅ Gasto guardado · Categoría detectada: **{categoria_ia.upper()}** "
-                                f"{EMOJI_CAT.get(categoria_ia.upper(), '📦')}"
+                                f"✅ Gasto guardado · Categoría: **{cat_ia.upper()}** "
+                                f"{EMOJI_CAT.get(cat_ia.upper(),'📦')} · +{res_gami['xp_ganado']} XP ⭐"
                             )
                             st.rerun()
                         else:
                             st.error(msg)
                     else:
-                        st.warning("Completa el monto y la descripción del gasto.")
+                        st.warning("Completa el monto y la descripción.")
+
 
     # ══════════════════════════════════════════
-    # SECCIÓN 2: ACADEMIA FINANCIERA
+    # SECCIÓN 2: MI PROGRESO
+    # ══════════════════════════════════════════
+    elif opcion_menu == "🏆 Mi Progreso":
+
+        gami = obtener_estado(user_id)
+        racha_emoji = "🔥" if gami["racha_viva"] else "💤"
+
+        st.markdown(f"""
+        <div class="gami-hero">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <span style="font-size:2.8rem;">{racha_emoji}</span>
+            <div>
+              <div style="font-size:0.9rem;font-weight:500;opacity:.8;">Racha actual</div>
+              <div style="font-size:2.6rem;font-weight:800;line-height:1;">{gami['racha_actual']} días</div>
+            </div>
+            <span class="nivel-pill">Nivel {gami['nivel']} · {gami['nivel_nombre']}</span>
+          </div>
+          <div style="font-size:0.82rem;opacity:.8;margin-bottom:6px;">
+            Progreso al siguiente nivel — {gami['xp_total']} / {gami['xp_siguiente']} XP
+          </div>
+          <div class="xp-bar-wrap">
+            <div class="xp-bar-fill" style="width:{gami['progreso_pct']}%;"></div>
+          </div>
+          <div style="font-size:0.75rem;opacity:.65;">{gami['progreso_pct']}% completado</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="gami-stat-grid">
+          <div class="gami-stat">
+            <div class="gami-stat-val" style="color:{COLOR_ORO};">⭐ {gami['xp_total']}</div>
+            <div class="gami-stat-lbl">XP Total</div>
+          </div>
+          <div class="gami-stat">
+            <div class="gami-stat-val" style="color:{COLOR_ROJO};">🔥 {gami['racha_actual']}</div>
+            <div class="gami-stat-lbl">Racha Actual</div>
+          </div>
+          <div class="gami-stat">
+            <div class="gami-stat-val" style="color:{COLOR_AZUL};">🏅 {len(gami['badges'])}/{len(BADGES)}</div>
+            <div class="gami-stat-lbl">Logros</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not gami["racha_viva"] and gami["racha_actual"] == 0:
+            st.info("💡 Registra un ingreso o gasto hoy para iniciar tu racha.")
+        elif gami["racha_viva"]:
+            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>', unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ Tu racha se rompió. ¡Registra un movimiento hoy para reiniciarla!")
+
+        if gami["racha_maxima"] > 0:
+            st.caption(f"🏆 Tu récord personal: **{gami['racha_maxima']} días** seguidos")
+
+        st.divider()
+
+        st.subheader("⭐ ¿Cómo ganar XP?")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("""
+| Acción | XP |
+|--------|-----|
+| 🛒 Registrar un gasto | +10 XP |
+| 💵 Registrar un ingreso | +5 XP |
+| 🎬 Visitar la Academia | +15 XP |
+| 🔐 Hacer login | +2 XP |
+            """)
+        with col_b:
+            st.markdown("""
+| Nivel | XP Requerido |
+|-------|-------------|
+| 1 · Principiante | 0 XP |
+| 2 · Estudiante | 100 XP |
+| 3 · Analista | 500 XP |
+| 4 · Experto | 1000 XP |
+            """)
+
+        st.divider()
+
+        st.subheader("🏅 Colección de Logros")
+        badges_usuario = gami["badges"] or []
+        cards_html = '<div class="badge-grid">'
+        for clave, info in BADGES.items():
+            desbloqueado = clave in badges_usuario
+            clase = "badge-card desbloqueado" if desbloqueado else "badge-card bloqueado"
+            icono = info["emoji"] if desbloqueado else "🔒"
+            cards_html += f"""
+            <div class="{clase}">
+              <div class="badge-emoji">{icono}</div>
+              <div class="badge-nombre">{info['nombre']}</div>
+              <div class="badge-desc">{info['desc']}</div>
+            </div>"""
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+
+    # ══════════════════════════════════════════
+    # SECCIÓN 3: ACADEMIA FINANCIERA
     # ══════════════════════════════════════════
     elif opcion_menu == "📚 Academia Financiera":
 
-        st.header("📚 Academia Polibank")
-        st.write("Aprende a manejar tu dinero como un profesional con videos cortos y prácticos.")
+        registrar_accion(user_id, "video", {"_visito_academia": True})
 
-        # CTA a TikTok
-        st.markdown(f"""
+        st.header("📚 Academia Polibank")
+        st.write("Aprende a manejar tu dinero con videos cortos y prácticos.")
+
+        st.markdown("""
         <div style="background:linear-gradient(135deg,#010101,#69C9D0);
-                    border-radius:12px; padding:20px; text-align:center; margin-bottom:20px;">
-          <div style="color:white; font-size:1.1rem; font-weight:700; margin-bottom:8px;">
+                    border-radius:12px;padding:20px;text-align:center;margin-bottom:20px;">
+          <div style="color:white;font-size:1.1rem;font-weight:700;margin-bottom:8px;">
             📱 ¡Síguenos en TikTok para contenido nuevo cada semana!
           </div>
-          <div style="color:#ddd; font-size:0.85rem;">@polibank_ · Tips de finanzas para universitarios</div>
+          <div style="color:#ddd;font-size:0.85rem;">@polibank_ · Tips de finanzas para universitarios</div>
         </div>
         """, unsafe_allow_html=True)
 
         col_tik, _, _ = st.columns([1, 1, 1])
         with col_tik:
-            st.link_button(
-                "🎵 Ir al TikTok de Polibank",
-                "https://www.tiktok.com/@polibank_?lang=es-419",
-                use_container_width=True
-            )
+            st.link_button("🎵 Ir al TikTok de Polibank",
+                           "https://www.tiktok.com/@polibank_?lang=es-419",
+                           use_container_width=True)
 
         st.divider()
 
-        # Videos
         st.subheader("📺 Videos Recomendados")
         videos_db = obtener_videos_educativos()
-
         if videos_db:
-            # Máximo 2 columnas para que no se rompan en pantallas pequeñas
             for i in range(0, len(videos_db), 2):
                 cols = st.columns(min(2, len(videos_db) - i))
                 for j, col in enumerate(cols):
@@ -470,15 +543,14 @@ else:
 
         st.divider()
 
-        # Glosario básico de conceptos financieros
         st.subheader("📖 Conceptos Clave")
         conceptos = {
-            "💰 Presupuesto": "Plan para distribuir tus ingresos en gastos, ahorro e inversión antes de gastar.",
+            "💰 Presupuesto": "Plan para distribuir tus ingresos antes de gastar. Primero ahorra, luego gasta.",
             "📈 Interés compuesto": "Ganar interés sobre tus intereses. Einstein lo llamó 'la octava maravilla del mundo'.",
             "🛡️ Fondo de emergencia": "Ahorro equivalente a 3–6 meses de gastos para imprevistos.",
             "📊 Regla 50/30/20": "50% necesidades · 30% gustos · 20% ahorro. Un modelo simple para empezar.",
-            "🏦 Inversión": "Poner tu dinero a trabajar para ti: acciones, fondos mutuos, ETFs, etc.",
-            "💳 Deuda buena vs mala": "Deuda buena genera valor (estudios, negocio). Deuda mala financia consumo que pierde valor.",
+            "🏦 Inversión": "Poner tu dinero a trabajar: acciones, fondos mutuos, ETFs, etc.",
+            "💳 Deuda buena vs mala": "Deuda buena genera valor (estudios, negocio). Deuda mala financia consumo.",
         }
         for titulo, descripcion in conceptos.items():
             with st.expander(titulo):
