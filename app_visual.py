@@ -9,9 +9,12 @@ from datetime import datetime, date
 import pandas as pd
 import plotly.express as px
 from app.ai_core import clasificar_gasto
+from supabase import create_client
+from config import SUPABASE_URL, SUPABASE_KEY
+import uuid
 
 # ─────────────────────────────────────────────
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Polibank", page_icon="🐢", layout="centered")
 
@@ -21,10 +24,11 @@ COLOR_ROJO        = "#E74C3C"
 COLOR_AZUL        = "#2E86AB"
 COLOR_ORO         = "#F39C12"
 
+supabase_client = create_client(SUPABASE_URL.strip().rstrip('/'), SUPABASE_KEY.strip())
+
 st.markdown(f"""
 <style>
   .block-container {{ padding-top: 1.5rem; }}
-
   .metric-card {{
     background: white; border-radius: 12px; padding: 18px 16px;
     text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -37,7 +41,6 @@ st.markdown(f"""
   .metric-value.verde {{ color:{COLOR_VERDE}; }}
   .metric-value.rojo  {{ color:{COLOR_ROJO};  }}
   .metric-value.azul  {{ color:{COLOR_AZUL};  }}
-
   .badge-cat {{ display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }}
   .badge-comida     {{ background:#FFF3CD; color:#856404; }}
   .badge-transporte {{ background:#D1ECF1; color:#0C5460; }}
@@ -45,7 +48,6 @@ st.markdown(f"""
   .badge-diversion  {{ background:#F8D7DA; color:#721C24; }}
   .badge-otros      {{ background:#E2E3E5; color:#383D41; }}
   .badge-ingresos   {{ background:#D4EDDA; color:#155724; }}
-
   .alerta-negativo {{
     background:#FFF3CD; border-left:4px solid #FFC107; border-radius:8px;
     padding:12px 16px; margin:12px 0; font-weight:600; color:#856404;
@@ -54,7 +56,15 @@ st.markdown(f"""
     background:#EAF6EE; border-left:4px solid {COLOR_VERDE}; border-radius:8px;
     padding:12px 16px; margin:10px 0; font-size:0.88rem; color:#1a5c34;
   }}
-
+  .mov-row {{
+    background: white; border-radius: 10px; padding: 12px 16px;
+    margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    border-left: 3px solid #e8e8e8;
+  }}
+  .mov-row.ingreso {{ border-left-color: {COLOR_VERDE}; }}
+  .mov-row.gasto   {{ border-left-color: {COLOR_ROJO}; }}
+  .mov-detalle  {{ font-size:0.88rem; color:#555; }}
+  .mov-monto    {{ font-size:1.05rem; font-weight:800; }}
   /* GAMIFICACIÓN */
   .gami-hero {{
     background: linear-gradient(135deg, #1B8A4C, #27AE60);
@@ -110,6 +120,23 @@ def badge_cat(categoria: str) -> str:
     cat = categoria.upper()
     return f'<span class="badge-cat badge-{cat.lower()}">{EMOJI_CAT.get(cat,"📦")} {cat}</span>'
 
+def subir_factura(archivo, usuario_id: int, mov_descripcion: str) -> str | None:
+    """Sube una imagen al bucket 'facturas' de Supabase Storage y devuelve la URL pública."""
+    try:
+        extension = archivo.name.split(".")[-1].lower()
+        nombre_archivo = f"{usuario_id}/{uuid.uuid4()}.{extension}"
+        contenido = archivo.read()
+        supabase_client.storage.from_("facturas").upload(
+            path=nombre_archivo,
+            file=contenido,
+            file_options={"content-type": archivo.type}
+        )
+        url_publica = supabase_client.storage.from_("facturas").get_public_url(nombre_archivo)
+        return url_publica
+    except Exception as e:
+        print(f"Error subiendo factura: {e}")
+        return None
+
 
 # ─────────────────────────────────────────────
 # CABECERA
@@ -125,7 +152,6 @@ with col_titulo:
 # BLOQUE A: LOGIN / REGISTRO
 # ═══════════════════════════════════════════════
 if "usuario_conectado" not in st.session_state:
-
     tab_login, tab_registro = st.tabs(["🔒 Iniciar Sesión", "📝 Crear Cuenta"])
 
     with tab_login:
@@ -154,10 +180,7 @@ if "usuario_conectado" not in st.session_state:
                     st.warning("La contraseña debe tener al menos 6 caracteres.")
                 else:
                     exito, mensaje = registrar_usuario(correo_reg, pass_reg)
-                    if exito:
-                        st.success(mensaje)
-                    else:
-                        st.error(mensaje)
+                    st.success(mensaje) if exito else st.error(mensaje)
             else:
                 st.warning("Completa todos los campos.")
 
@@ -179,14 +202,14 @@ else:
 
     st.divider()
 
-    # Mini widget de progreso en sidebar
+    # Mini widget sidebar
     gami = obtener_estado(user_id)
     racha_emoji = "🔥" if gami["racha_viva"] else "💤"
     st.sidebar.markdown(f"""
     <div class="sidebar-gami">
-      <div style="font-size:0.7rem; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:.5px;">Tu progreso</div>
-      <div style="font-size:1.6rem; font-weight:800; color:#1B8A4C; margin:4px 0;">{racha_emoji} {gami['racha_actual']} días</div>
-      <div style="font-size:0.75rem; color:#888;">⭐ {gami['xp_total']} XP · Nivel {gami['nivel']} {gami['nivel_nombre']}</div>
+      <div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Tu progreso</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#1B8A4C;margin:4px 0;">{racha_emoji} {gami['racha_actual']} días</div>
+      <div style="font-size:0.75rem;color:#888;">⭐ {gami['xp_total']} XP · Nivel {gami['nivel']} {gami['nivel_nombre']}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -195,7 +218,7 @@ else:
         ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera"]
     )
 
-    # Mostrar badges nuevos si los hay
+    # Notificación de badges nuevos
     if "gami_notif" in st.session_state:
         notif = st.session_state.pop("gami_notif")
         for b in notif.get("badges_nuevos", []):
@@ -214,6 +237,7 @@ else:
 
         movimientos_db = obtener_movimientos(user_id)
 
+        # Calcular totales
         total_ingresos = 0.0
         total_egresos  = 0.0
         historial_tabla = []
@@ -224,33 +248,29 @@ else:
             monto_num   = float(mov["monto"])
             fecha_dt    = datetime.strptime(mov["fecha"], "%Y-%m-%d")
             fecha_label = fecha_dt.strftime("%d-%b")
-
             if fecha_label not in datos_por_dia:
-                datos_por_dia[fecha_label] = {"Ingresos":0.0, "Egresos":0.0, "_orden":fecha_dt}
-
-            cat = mov.get("categoria", "OTROS").upper()
-
+                datos_por_dia[fecha_label] = {"Ingresos":0.0,"Egresos":0.0,"_orden":fecha_dt}
+            cat = mov.get("categoria","OTROS").upper()
             if mov["tipo"] == "Ingreso":
                 total_ingresos += monto_num
                 datos_por_dia[fecha_label]["Ingresos"] += monto_num
-                tipo_label = "💵 Ingreso"
-                monto_texto = f"+${monto_num:.2f}"
+                tipo_label = "💵 Ingreso"; monto_texto = f"+${monto_num:.2f}"
             else:
                 total_egresos += monto_num
                 datos_por_dia[fecha_label]["Egresos"] += monto_num
-                tipo_label = "🛒 Gasto"
-                monto_texto = f"-${monto_num:.2f}"
+                tipo_label = "🛒 Gasto"; monto_texto = f"-${monto_num:.2f}"
                 cat_totales[cat if cat in cat_totales else "OTROS"] += monto_num
-
             historial_tabla.append({
                 "Fecha": fecha_label, "Tipo": tipo_label, "Detalle": mov["detalle"],
                 "Categoría": cat, "Monto ($)": monto_texto,
-                "_id": mov.get("id"), "_fecha_dt": fecha_dt
+                "_id": mov.get("id"), "_fecha_dt": fecha_dt,
+                "_monto_num": monto_num, "_fecha_raw": mov["fecha"],
+                "_factura_url": mov.get("factura_url")
             })
 
         balance = total_ingresos - total_egresos
 
-        # Métricas
+        # ── MÉTRICAS
         st.subheader("📊 Resumen de tu Cuenta")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -273,38 +293,52 @@ else:
 
         st.write("")
 
-        # Gráficas
+        # ── GRÁFICAS
         if datos_por_dia:
-            tab_barras, tab_pie, tab_linea = st.tabs(["📊 Ingresos vs Gastos", "🥧 Por Categoría", "📈 Saldo Acumulado"])
+            tab_barras, tab_categorias, tab_linea = st.tabs(
+                ["📊 Ingresos vs Gastos", "📊 Gastos por Categoría", "📈 Saldo Acumulado"]
+            )
             dias_ord = sorted(datos_por_dia.items(), key=lambda x: x[1]["_orden"])
 
             with tab_barras:
                 filas = []
                 for fl, m in dias_ord:
                     filas += [{"Fecha":fl,"Monto ($)":m["Ingresos"],"Tipo":"Ingresos"},
-                               {"Fecha":fl,"Monto ($)":m["Egresos"], "Tipo":"Egresos"}]
+                               {"Fecha":fl,"Monto ($)":m["Egresos"],"Tipo":"Egresos"}]
                 fig = px.bar(pd.DataFrame(filas), x="Fecha", y="Monto ($)", color="Tipo",
                              barmode="group", text_auto='.2f',
                              color_discrete_map={"Ingresos":COLOR_VERDE_CLARO,"Egresos":COLOR_ROJO})
                 fig.update_layout(height=360, plot_bgcolor="white")
                 st.plotly_chart(fig, use_container_width=True)
 
-            with tab_pie:
+            with tab_categorias:
+                # Barras horizontales por categoría
                 cat_f = {k:v for k,v in cat_totales.items() if v > 0}
                 if cat_f:
-                    fig2 = px.pie(values=list(cat_f.values()), names=list(cat_f.keys()),
-                                  color_discrete_sequence=px.colors.qualitative.Set2, hole=0.38)
-                    fig2.update_traces(textposition='inside', textinfo='percent+label')
-                    fig2.update_layout(height=340)
-                    st.plotly_chart(fig2, use_container_width=True)
+                    df_cat = pd.DataFrame([
+                        {"Categoría": f"{EMOJI_CAT.get(k,'📦')} {k}", "Monto ($)": v}
+                        for k, v in sorted(cat_f.items(), key=lambda x: x[1], reverse=True)
+                    ])
+                    fig_cat = px.bar(
+                        df_cat, x="Monto ($)", y="Categoría", orientation="h",
+                        text_auto='.2f',
+                        color="Monto ($)",
+                        color_continuous_scale=["#27AE60","#F39C12","#E74C3C"]
+                    )
+                    fig_cat.update_layout(
+                        height=320, plot_bgcolor="white",
+                        showlegend=False, coloraxis_showscale=False,
+                        yaxis={"categoryorder":"total ascending"}
+                    )
+                    fig_cat.update_traces(textposition="outside")
+                    st.plotly_chart(fig_cat, use_container_width=True)
                     cat_max = max(cat_f, key=cat_f.get)
                     st.markdown(f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>', unsafe_allow_html=True)
                 else:
                     st.info("Aún no hay gastos para mostrar.")
 
             with tab_linea:
-                saldo_acum = 0.0
-                puntos = []
+                saldo_acum = 0.0; puntos = []
                 for fl, m in dias_ord:
                     saldo_acum += m["Ingresos"] - m["Egresos"]
                     puntos.append({"Fecha":fl,"Saldo ($)":saldo_acum})
@@ -318,33 +352,9 @@ else:
 
         st.divider()
 
-        # Historial
-        st.subheader("🗒️ Historial de Movimientos")
-        if historial_tabla:
-            historial_tabla.sort(key=lambda x: x["_fecha_dt"], reverse=True)
-            filtro = st.selectbox("Filtrar:", ["Todos", "💵 Ingreso", "🛒 Gasto"], key="filtro_hist")
-            lista = [m for m in historial_tabla if filtro == "Todos" or m["Tipo"] == filtro]
-            for mov in lista:
-                c_inf, c_del = st.columns([10, 1])
-                with c_inf:
-                    color_m = COLOR_VERDE if mov["Tipo"] == "💵 Ingreso" else COLOR_ROJO
-                    st.markdown(
-                        f"**{mov['Fecha']}** · {badge_cat(mov['Categoría'])} &nbsp;"
-                        f"{mov['Detalle']} &nbsp;"
-                        f"<span style='color:{color_m};font-weight:800'>{mov['Monto ($)']}</span>",
-                        unsafe_allow_html=True
-                    )
-                with c_del:
-                    if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
-                        ok, _ = eliminar_movimiento(mov["_id"])
-                        if ok:
-                            st.rerun()
-        else:
-            st.write("No hay transacciones registradas.")
-
-        st.divider()
-
-        # Registrar movimientos
+        # ══════════════════════════════════════════
+        # REGISTRAR MOVIMIENTOS (ahora arriba del historial)
+        # ══════════════════════════════════════════
         st.subheader("➕ Registrar Movimiento")
         tab_ing, tab_gas = st.tabs(["💵 Ingreso", "🛒 Gasto con IA"])
 
@@ -353,20 +363,35 @@ else:
                 monto_ing  = st.number_input("Monto ($)", min_value=0.01, step=10.0)
                 fuente_ing = st.text_input("Fuente", placeholder="Beca ESPOL, Trabajo, Mesada…")
                 fecha_ing  = st.date_input("Fecha", value=date.today())
+                factura_ing = st.file_uploader(
+                    "📎 Adjuntar factura (opcional)",
+                    type=["jpg","jpeg","png","pdf"],
+                    key="factura_ing"
+                )
                 if st.form_submit_button("💾 Guardar Ingreso", use_container_width=True):
                     if monto_ing > 0:
+                        # Subir factura si hay
+                        url_factura = None
+                        if factura_ing:
+                            with st.spinner("Subiendo factura…"):
+                                url_factura = subir_factura(factura_ing, user_id, fuente_ing)
+
                         exito, msg = guardar_movimiento(
                             user_id, "Ingreso",
                             fuente_ing.strip() or "Ingreso manual",
                             monto_ing, "INGRESOS",
-                            fecha_ing.strftime("%Y-%m-%d")
+                            fecha_ing.strftime("%Y-%m-%d"),
+                            factura_url=url_factura
                         )
                         if exito:
                             res_gami = registrar_accion(user_id, "ingreso", {
                                 "_saldo_positivo": (total_ingresos + monto_ing - total_egresos) > 0
                             })
                             st.session_state["gami_notif"] = res_gami
-                            st.success(f"✅ Ingreso de ${monto_ing:.2f} guardado · +{res_gami['xp_ganado']} XP ⭐")
+                            msg_ok = f"✅ Ingreso de ${monto_ing:.2f} guardado · +{res_gami['xp_ganado']} XP ⭐"
+                            if url_factura:
+                                msg_ok += " · 📎 Factura guardada"
+                            st.success(msg_ok)
                             st.rerun()
                         else:
                             st.error(msg)
@@ -375,30 +400,133 @@ else:
 
         with tab_gas:
             with st.form("form_gasto", clear_on_submit=True):
-                monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
-                texto_gas = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
-                fecha_gas = st.date_input("Fecha", value=date.today())
+                monto_gas  = st.number_input("Monto ($)", min_value=0.01, step=1.0)
+                texto_gas  = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
+                fecha_gas  = st.date_input("Fecha", value=date.today())
+                factura_gas = st.file_uploader(
+                    "📎 Adjuntar factura (opcional)",
+                    type=["jpg","jpeg","png","pdf"],
+                    key="factura_gas"
+                )
                 if st.form_submit_button("🤖 Clasificar con IA y Guardar", use_container_width=True):
                     if monto_gas > 0 and texto_gas.strip():
                         with st.spinner("Clasificando con IA…"):
                             cat_ia = clasificar_gasto(texto_gas)
-                            exito, msg = guardar_movimiento(
-                                user_id, "Gasto", texto_gas,
-                                monto_gas, cat_ia.upper(),
-                                fecha_gas.strftime("%Y-%m-%d")
-                            )
+
+                        url_factura = None
+                        if factura_gas:
+                            with st.spinner("Subiendo factura…"):
+                                url_factura = subir_factura(factura_gas, user_id, texto_gas)
+
+                        exito, msg = guardar_movimiento(
+                            user_id, "Gasto", texto_gas,
+                            monto_gas, cat_ia.upper(),
+                            fecha_gas.strftime("%Y-%m-%d"),
+                            factura_url=url_factura
+                        )
                         if exito:
                             res_gami = registrar_accion(user_id, "gasto")
                             st.session_state["gami_notif"] = res_gami
-                            st.success(
+                            msg_ok = (
                                 f"✅ Gasto guardado · Categoría: **{cat_ia.upper()}** "
                                 f"{EMOJI_CAT.get(cat_ia.upper(),'📦')} · +{res_gami['xp_ganado']} XP ⭐"
                             )
+                            if url_factura:
+                                msg_ok += " · 📎 Factura guardada"
+                            st.success(msg_ok)
                             st.rerun()
                         else:
                             st.error(msg)
                     else:
                         st.warning("Completa el monto y la descripción.")
+
+        st.divider()
+
+        # ══════════════════════════════════════════
+        # HISTORIAL COMPACTO CON BÚSQUEDA POR FECHA
+        # ══════════════════════════════════════════
+        st.subheader("🗒️ Historial de Movimientos")
+
+        if historial_tabla:
+            historial_tabla.sort(key=lambda x: x["_fecha_dt"], reverse=True)
+
+            # Filtros en una fila
+            col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
+            with col_f1:
+                filtro_tipo = st.selectbox("Tipo", ["Todos","💵 Ingreso","🛒 Gasto"], key="filtro_tipo")
+            with col_f2:
+                fecha_desde = st.date_input("Desde", value=None, key="fecha_desde")
+            with col_f3:
+                fecha_hasta = st.date_input("Hasta", value=None, key="fecha_hasta")
+
+            # Aplicar filtros
+            lista = historial_tabla.copy()
+            if filtro_tipo != "Todos":
+                lista = [m for m in lista if m["Tipo"] == filtro_tipo]
+            if fecha_desde:
+                lista = [m for m in lista if m["_fecha_dt"].date() >= fecha_desde]
+            if fecha_hasta:
+                lista = [m for m in lista if m["_fecha_dt"].date() <= fecha_hasta]
+
+            st.caption(f"Mostrando {min(len(lista), 8)} de {len(lista)} transacciones")
+
+            # Mostrar máximo 8 filas, el resto con expander
+            def render_mov(mov):
+                es_ingreso  = mov["Tipo"] == "💵 Ingreso"
+                color_m     = COLOR_VERDE if es_ingreso else COLOR_ROJO
+                clase       = "ingreso" if es_ingreso else "gasto"
+                tiene_factura = bool(mov.get("_factura_url"))
+                icono_factura = " 📎" if tiene_factura else ""
+
+                # Fila principal: info + botón eliminar
+                col_info, col_del = st.columns([11, 1])
+                with col_info:
+                    st.markdown(
+                        f'<div class="mov-row {clase}">'
+                        f'<span style="font-size:0.78rem;color:#999;">{mov["Fecha"]}</span> '
+                        f'{badge_cat(mov["Categoría"])} '
+                        f'<span class="mov-detalle">{mov["Detalle"]}{icono_factura}</span>'
+                        f'<span class="mov-monto" style="color:{color_m};float:right;">{mov["Monto ($)"]}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                with col_del:
+                    st.write("")
+                    if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
+                        ok, _ = eliminar_movimiento(mov["_id"])
+                        if ok:
+                            st.rerun()
+
+                # Panel de factura expandible debajo de la fila
+                if tiene_factura:
+                    url = mov["_factura_url"]
+                    with st.expander("📎 Ver factura adjunta"):
+                        # Detectar si es PDF o imagen por la URL
+                        if url.lower().endswith(".pdf"):
+                            st.markdown(
+                                f'<a href="{url}" target="_blank" style="font-weight:600;color:{COLOR_VERDE};">'
+                                f'📄 Abrir PDF en nueva pestaña</a>',
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            # Mostrar imagen directamente
+                            st.image(url, use_container_width=True)
+                            st.markdown(
+                                f'<a href="{url}" target="_blank" style="font-size:0.8rem;color:#888;">Ver en tamaño completo ↗</a>',
+                                unsafe_allow_html=True
+                            )
+
+            # Primeros 8 visibles
+            for mov in lista[:8]:
+                render_mov(mov)
+
+            # El resto dentro de un expander
+            if len(lista) > 8:
+                with st.expander(f"Ver {len(lista) - 8} transacciones más…"):
+                    for mov in lista[8:]:
+                        render_mov(mov)
+        else:
+            st.info("No hay transacciones registradas aún.")
 
 
     # ══════════════════════════════════════════
@@ -518,7 +646,7 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        col_tik, _, _ = st.columns([1, 1, 1])
+        col_tik, _, _ = st.columns([1,1,1])
         with col_tik:
             st.link_button("🎵 Ir al TikTok de Polibank",
                            "https://www.tiktok.com/@polibank_?lang=es-419",

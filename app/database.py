@@ -2,13 +2,8 @@ import bcrypt
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
 
-url_limpia = SUPABASE_URL.strip().rstrip('/')
-key_limpia = SUPABASE_KEY.strip()
+supabase: Client = create_client(SUPABASE_URL.strip().rstrip('/'), SUPABASE_KEY.strip())
 
-supabase: Client = create_client(url_limpia, key_limpia)
-
-
-# 1. REGISTRAR USUARIO
 def registrar_usuario(correo, password):
     hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     try:
@@ -20,8 +15,6 @@ def registrar_usuario(correo, password):
     except Exception:
         return False, "El correo ya se encuentra registrado."
 
-
-# 2. INICIAR SESIÓN
 def login_usuario(correo, password):
     try:
         respuesta = supabase.from_("usuarios").select("*").eq("correo", correo.lower().strip()).execute()
@@ -32,26 +25,25 @@ def login_usuario(correo, password):
                 return True, usuario
         return False, "Correo o contraseña incorrectos."
     except Exception as e:
-        return False, f"Error al conectar con la base de datos: {str(e)}"
+        return False, f"Error al conectar: {str(e)}"
 
-
-# 3. GUARDAR MOVIMIENTO
-def guardar_movimiento(usuario_id, tipo, detalle, monto, categoria, fecha):
+def guardar_movimiento(usuario_id, tipo, detalle, monto, categoria, fecha, factura_url=None):
     try:
-        supabase.from_("movimientos").insert({
+        fila = {
             "usuario_id": usuario_id,
-            "tipo": tipo,
-            "detalle": detalle,
-            "monto": float(monto),
-            "categoria": categoria,
-            "fecha": str(fecha)
-        }).execute()
-        return True, "Movimiento guardado con éxito."
+            "tipo":       tipo,
+            "detalle":    detalle,
+            "monto":      float(monto),
+            "categoria":  categoria,
+            "fecha":      str(fecha)
+        }
+        if factura_url:
+            fila["factura_url"] = factura_url
+        supabase.from_("movimientos").insert(fila).execute()
+        return True, "Movimiento guardado."
     except Exception as e:
-        return False, f"Error al guardar movimiento: {str(e)}"
+        return False, f"Error al guardar: {str(e)}"
 
-
-# 4. OBTENER MOVIMIENTOS (ordenados por fecha descendente)
 def obtener_movimientos(usuario_id):
     try:
         respuesta = (
@@ -63,24 +55,19 @@ def obtener_movimientos(usuario_id):
         )
         return respuesta.data
     except Exception as e:
-        print(f"Error al obtener movimientos: {str(e)}")
+        print(f"Error: {str(e)}")
         return []
 
-
-# 5. OBTENER VIDEOS EDUCATIVOS
 def obtener_videos_educativos():
     try:
-        respuesta = supabase.from_("videos").select("*").order("id").execute()
-        return respuesta.data
+        return supabase.from_("videos").select("*").order("id").execute().data
     except Exception as e:
-        print(f"Error al cargar videos: {e}")
+        print(f"Error: {e}")
         return []
 
-
-# 6. ELIMINAR MOVIMIENTO POR ID
 def eliminar_movimiento(movimiento_id):
     try:
         supabase.from_("movimientos").delete().eq("id", movimiento_id).execute()
-        return True, "Movimiento eliminado."
+        return True, "Eliminado."
     except Exception as e:
-        return False, f"Error al eliminar: {str(e)}"
+        return False, str(e)
