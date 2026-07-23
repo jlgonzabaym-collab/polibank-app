@@ -14,6 +14,7 @@ from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
 import json
 from streamlit_cookies_manager import EncryptedCookieManager
+from academia_ui import render_academia
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -650,55 +651,22 @@ else:
     # ══════════════════════════════════════════
     elif opcion_menu == "📚 Academia Financiera":
 
-        registrar_accion(user_id, "video", {"_visito_academia": True})
-
-        st.header("📚 Academia Polibank")
-        st.write("Aprende a manejar tu dinero con videos cortos y prácticos.")
-
+        # Banner TikTok
         st.markdown("""
         <div style="background:linear-gradient(135deg,#010101,#69C9D0);
-                    border-radius:12px;padding:20px;text-align:center;margin-bottom:20px;">
-          <div style="color:white;font-size:1.1rem;font-weight:700;margin-bottom:8px;">
-            📱 ¡Síguenos en TikTok para contenido nuevo cada semana!
+                    border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:16px;">
+          <div style="color:white;font-size:1rem;font-weight:700;margin-bottom:4px;">
+            \U0001f4f1 \u00a1S\u00edguenos en TikTok para contenido nuevo cada semana!
           </div>
-          <div style="color:#ddd;font-size:0.85rem;">@polibank_ · Tips de finanzas para universitarios</div>
+          <div style="color:#ddd;font-size:0.82rem;">@polibank_ \u00b7 Tips de finanzas para universitarios</div>
         </div>
         """, unsafe_allow_html=True)
-
-        col_tik, _, _ = st.columns([1,1,1])
+        col_tik, _, _ = st.columns([1, 1, 1])
         with col_tik:
-            st.link_button("🎵 Ir al TikTok de Polibank",
+            st.link_button("\U0001f3b5 Ir al TikTok de Polibank",
                            "https://www.tiktok.com/@polibank_?lang=es-419",
                            use_container_width=True)
-
         st.divider()
 
-        st.subheader("📺 Videos Recomendados")
-        videos_db = obtener_videos_educativos()
-        if videos_db:
-            for i in range(0, len(videos_db), 2):
-                cols = st.columns(min(2, len(videos_db) - i))
-                for j, col in enumerate(cols):
-                    if i + j < len(videos_db):
-                        video = videos_db[i + j]
-                        with col:
-                            st.markdown(f"**{video['titulo']}**")
-                            st.video(video['url_youtube'])
-                st.write("")
-        else:
-            st.info("📭 Aún no hay videos publicados. ¡Vuelve pronto!")
-
-        st.divider()
-
-        st.subheader("📖 Conceptos Clave")
-        conceptos = {
-            "💰 Presupuesto": "Plan para distribuir tus ingresos antes de gastar. Primero ahorra, luego gasta.",
-            "📈 Interés compuesto": "Ganar interés sobre tus intereses. Einstein lo llamó 'la octava maravilla del mundo'.",
-            "🛡️ Fondo de emergencia": "Ahorro equivalente a 3–6 meses de gastos para imprevistos.",
-            "📊 Regla 50/30/20": "50% necesidades · 30% gustos · 20% ahorro. Un modelo simple para empezar.",
-            "🏦 Inversión": "Poner tu dinero a trabajar: acciones, fondos mutuos, ETFs, etc.",
-            "💳 Deuda buena vs mala": "Deuda buena genera valor (estudios, negocio). Deuda mala financia consumo.",
-        }
-        for titulo, descripcion in conceptos.items():
-            with st.expander(titulo):
-                st.write(descripcion)
+        # Sistema de lecciones estilo Duolingo
+        render_academia(user_id, registrar_accion)
