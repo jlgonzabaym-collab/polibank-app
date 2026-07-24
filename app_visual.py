@@ -8,7 +8,7 @@ from app.gamificacion import registrar_accion, obtener_estado, BADGES
 from datetime import datetime, date
 import pandas as pd
 import plotly.express as px
-from app.ai_core import clasificar_gasto
+from app.ai_core import clasificar_gasto, asistente_general
 from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
@@ -637,8 +637,6 @@ else:
     # SECCIÓN 4: ASISTENTE POLIBANK
     # ══════════════════════════════════════════
     elif opcion_menu == "🐢 Asistente Polibank":
-
-        from app.ai_core import asistente_general
 
         st.markdown("""
         <div style="background:linear-gradient(135deg,#1B8A4C,#27AE60);
