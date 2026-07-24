@@ -12,8 +12,6 @@ from app.ai_core import clasificar_gasto
 from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
-import json
-from streamlit_cookies_manager import EncryptedCookieManager
 from academia_ui import render_academia
 
 # ─────────────────────────────────────────────
@@ -29,10 +27,6 @@ COLOR_ORO         = "#F39C12"
 
 supabase_client = create_client(SUPABASE_URL.strip().rstrip('/'), SUPABASE_KEY.strip())
 
-# ── COOKIES para mantener sesión al refrescar
-cookies = EncryptedCookieManager(prefix="polibank_", password="polibank_espol_2024_secret")
-if not cookies.ready():
-    st.stop()
 
 st.markdown(f"""
 <style>
@@ -155,14 +149,6 @@ with col_logo:
 with col_titulo:
     st.title("Polibank · ESPOL")
 
-# ── Restaurar sesión desde cookie si existe
-if "usuario_conectado" not in st.session_state:
-    cookie_usuario = cookies.get("usuario")
-    if cookie_usuario:
-        try:
-            st.session_state["usuario_conectado"] = json.loads(cookie_usuario)
-        except Exception:
-            pass
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
@@ -179,8 +165,6 @@ if "usuario_conectado" not in st.session_state:
                 exito, resultado = login_usuario(correo_login, pass_login)
                 if exito:
                     st.session_state["usuario_conectado"] = resultado
-                    cookies["usuario"] = json.dumps(resultado)
-                    cookies.save()
                     registrar_accion(resultado["id"], "login")
                     st.rerun()
                 else:
@@ -216,8 +200,6 @@ else:
     with col_logout:
         if st.button("Salir ❌", use_container_width=True):
             del st.session_state["usuario_conectado"]
-            cookies["usuario"] = ""
-            cookies.save()
             st.rerun()
 
     st.divider()
@@ -235,7 +217,7 @@ else:
 
     opcion_menu = st.sidebar.radio(
         "📱 Menú Polibank",
-        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera"]
+        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"]
     )
 
     # Notificación de badges nuevos
@@ -248,6 +230,7 @@ else:
                 f'<strong>{info.get("nombre","")}</strong> — {info.get("desc","")}</div>',
                 unsafe_allow_html=True
             )
+
 
 
     # ══════════════════════════════════════════
@@ -649,6 +632,101 @@ else:
     # ══════════════════════════════════════════
     # SECCIÓN 3: ACADEMIA FINANCIERA
     # ══════════════════════════════════════════
+
+    # ══════════════════════════════════════════
+    # SECCIÓN 4: ASISTENTE POLIBANK
+    # ══════════════════════════════════════════
+    elif opcion_menu == "🐢 Asistente Polibank":
+
+        from app.ai_core import asistente_general
+
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#1B8A4C,#27AE60);
+                    border-radius:16px;padding:20px 24px;color:white;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:2.5rem;">🐢</span>
+            <div>
+              <div style="font-size:1.1rem;font-weight:800;">Asistente Polibank</div>
+              <div style="font-size:0.82rem;opacity:.85;">Tu amigo financiero personal · Siempre disponible</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Inicializar historial
+        if "chat_historial" not in st.session_state:
+            st.session_state["chat_historial"] = []
+        if "chat_input_key" not in st.session_state:
+            st.session_state["chat_input_key"] = 0
+
+        # Mensaje de bienvenida
+        if not st.session_state["chat_historial"]:
+            st.session_state["chat_historial"].append({
+                "rol": "asistente",
+                "texto": "¡Hola! 🐢 Soy Polibank, tu asistente personal. Puedo ayudarte con tus finanzas, responder preguntas, darte consejos personalizados o simplemente conversar. ¿En qué te ayudo hoy?"
+            })
+
+        # Mostrar mensajes
+        for msg in st.session_state["chat_historial"]:
+            if msg["rol"] == "usuario":
+                with st.chat_message("user"):
+                    st.write(msg["texto"])
+            else:
+                with st.chat_message("assistant", avatar="🐢"):
+                    st.write(msg["texto"])
+
+        # Sugerencias rápidas
+        if len(st.session_state["chat_historial"]) <= 1:
+            st.markdown("**Preguntas frecuentes:**")
+            sugs = [
+                "¿En qué estoy gastando más?",
+                "¿Cómo puedo ahorrar más?",
+                "¿Cuál es mi saldo actual?",
+                "Dame un consejo financiero",
+            ]
+            cols = st.columns(2)
+            for i, sug in enumerate(sugs):
+                with cols[i % 2]:
+                    if st.button(sug, key=f"sug_{i}", use_container_width=True):
+                        st.session_state["chat_historial"].append({"rol": "usuario", "texto": sug})
+                        movs = obtener_movimientos(user_id)
+                        with st.spinner("🐢 Pensando..."):
+                            respuesta = asistente_general(
+                                pregunta=sug,
+                                movimientos=movs,
+                                historial_chat=st.session_state["chat_historial"],
+                                gami_estado=gami
+                            )
+                        st.session_state["chat_historial"].append({"rol": "asistente", "texto": respuesta})
+                        st.session_state["chat_input_key"] += 1
+                        st.rerun()
+
+        # Input del usuario
+        user_input = st.chat_input("Escribe tu mensaje...", key=f"chat_{st.session_state['chat_input_key']}")
+        if user_input and user_input.strip():
+            st.session_state["chat_historial"].append({"rol": "usuario", "texto": user_input.strip()})
+            movs = obtener_movimientos(user_id)
+            with st.spinner("🐢 Pensando..."):
+                respuesta = asistente_general(
+                    pregunta=user_input.strip(),
+                    movimientos=movs,
+                    historial_chat=st.session_state["chat_historial"],
+                    gami_estado=gami
+                )
+            st.session_state["chat_historial"].append({"rol": "asistente", "texto": respuesta})
+            st.session_state["chat_input_key"] += 1
+            st.rerun()
+
+        # Botón limpiar — discreto, debajo del input
+        if len(st.session_state["chat_historial"]) > 1:
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            col_esp, col_btn = st.columns([3, 1])
+            with col_btn:
+                if st.button("🗑️ Limpiar", key="limpiar_chat", use_container_width=True):
+                    st.session_state["chat_historial"] = []
+                    st.session_state["chat_input_key"] += 1
+                    st.rerun()
+
     elif opcion_menu == "📚 Academia Financiera":
 
         # Banner TikTok
