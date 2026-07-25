@@ -815,6 +815,8 @@ else:
     # ══════════════════════════════════════════
     # SECCIÓN 3: ACADEMIA FINANCIERA
     # ══════════════════════════════════════════
+    elif opcion_menu == "📚 Academia Financiera":
+        render_academia(user_id, registrar_accion)
 
     # ══════════════════════════════════════════
     # SECCIÓN 4: ASISTENTE POLIBANK
@@ -907,25 +909,3 @@ else:
                     st.session_state["chat_historial"] = []
                     st.session_state["chat_input_key"] += 1
                     st.rerun()
-
-    elif opcion_menu == "📚 Academia Financiera":
-
-        # Banner TikTok
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#010101,#69C9D0);
-                    border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:16px;">
-          <div style="color:white;font-size:1rem;font-weight:700;margin-bottom:4px;">
-            \U0001f4f1 \u00a1S\u00edguenos en TikTok para contenido nuevo cada semana!
-          </div>
-          <div style="color:#ddd;font-size:0.82rem;">@polibank_ \u00b7 Tips de finanzas para universitarios</div>
-        </div>
-        """, unsafe_allow_html=True)
-        _, col_tik, _ = st.columns([1, 2, 1])
-        with col_tik:
-            st.link_button("\U0001f3b5 Ir al TikTok de Polibank",
-                           "https://www.tiktok.com/@polibank_?lang=es-419",
-                           use_container_width=True)
-        st.divider()
-
-        # Sistema de lecciones estilo Duolingo
-        render_academia(user_id, registrar_accion)
