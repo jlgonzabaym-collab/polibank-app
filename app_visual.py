@@ -481,32 +481,71 @@ else:
                     filas += [{"Fecha": fl, "Monto ($)": m["Ingresos"], "Tipo": "Ingresos"},
                               {"Fecha": fl, "Monto ($)": m["Egresos"], "Tipo": "Egresos"}]
                 fig = px.bar(pd.DataFrame(filas), x="Fecha", y="Monto ($)", color="Tipo",
-                             barmode="group", text_auto='.2f',
+                             barmode="group",
                              color_discrete_map={"Ingresos": COLOR_VERDE_CLARO, "Egresos": COLOR_ROJO})
-                fig.update_layout(height=360, plot_bgcolor="white")
-                st.plotly_chart(fig, use_container_width=True)
+                fig.update_traces(
+                    texttemplate="$%{y:,.0f}", textposition="outside",
+                    textfont=dict(size=9, color="#12241C"),
+                    marker_line_width=0,
+                    selector=dict(type="bar")
+                )
+                fig.update_layout(
+                    height=320,
+                    plot_bgcolor="white", paper_bgcolor="white",
+                    font=dict(family="Inter, sans-serif", color="#12241C", size=11),
+                    margin=dict(l=8, r=8, t=36, b=8),
+                    legend=dict(
+                        orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1,
+                        font=dict(size=11), bgcolor="rgba(0,0,0,0)",
+                        title_text=""
+                    ),
+                    xaxis=dict(showgrid=False, linecolor="#E7ECE8",
+                               tickfont=dict(size=10, color="#7A8A80"), title=""),
+                    yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
+                               linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
+                               tickprefix="$", title=""),
+                    bargap=0.25, bargroupgap=0.1,
+                    modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
+                                    "zoomOut2d","autoScale2d","resetScale2d",
+                                    "toImage","sendDataToCloud"],
+                )
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
             with tab_categorias:
-                # Barras horizontales por categoría
                 cat_f = {k: v for k, v in cat_totales.items() if v > 0}
                 if cat_f:
                     df_cat = pd.DataFrame([
                         {"Categoría": f"{EMOJI_CAT.get(k, '📦')} {k}", "Monto ($)": v}
-                        for k, v in sorted(cat_f.items(), key=lambda x: x[1], reverse=True)
+                        for k, v in sorted(cat_f.items(), key=lambda x: x[1])
                     ])
                     fig_cat = px.bar(
                         df_cat, x="Monto ($)", y="Categoría", orientation="h",
-                        text_auto='.2f',
                         color="Monto ($)",
-                        color_continuous_scale=[COLOR_VERDE_CLARO, COLOR_ORO, COLOR_ROJO]
+                        color_continuous_scale=["#2FAE60", "#E8A722", "#E5533D"]
+                    )
+                    fig_cat.update_traces(
+                        texttemplate="$%{x:,.0f}", textposition="outside",
+                        textfont=dict(size=9, color="#12241C"),
+                        marker_line_width=0,
                     )
                     fig_cat.update_layout(
-                        height=320, plot_bgcolor="white",
+                        height=max(200, len(cat_f) * 52),
+                        plot_bgcolor="white", paper_bgcolor="white",
+                        font=dict(family="Inter, sans-serif", color="#12241C", size=11),
+                        margin=dict(l=8, r=48, t=8, b=8),
                         showlegend=False, coloraxis_showscale=False,
-                        yaxis={"categoryorder": "total ascending"}
+                        xaxis=dict(showgrid=True, gridcolor="#F0F4F1",
+                                   linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
+                                   tickprefix="$", title=""),
+                        yaxis=dict(showgrid=False, linecolor="#E7ECE8",
+                                   tickfont=dict(size=11, color="#12241C"),
+                                   title="", categoryorder="total ascending"),
+                        modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
+                                        "zoomOut2d","autoScale2d","resetScale2d",
+                                        "toImage","sendDataToCloud"],
                     )
-                    fig_cat.update_traces(textposition="outside")
-                    st.plotly_chart(fig_cat, use_container_width=True)
+                    st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
                     cat_max = max(cat_f, key=cat_f.get)
                     st.markdown(
                         f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>',
@@ -515,16 +554,37 @@ else:
                     st.info("Aún no hay gastos para mostrar.")
 
             with tab_linea:
-                saldo_acum = 0.0;
+                saldo_acum = 0.0
                 puntos = []
                 for fl, m in dias_ord:
                     saldo_acum += m["Ingresos"] - m["Egresos"]
                     puntos.append({"Fecha": fl, "Saldo ($)": saldo_acum})
-                fig3 = px.line(pd.DataFrame(puntos), x="Fecha", y="Saldo ($)", markers=True,
-                               color_discrete_sequence=[COLOR_AZUL])
-                fig3.add_hline(y=0, line_dash="dash", line_color=COLOR_ROJO, opacity=0.5)
-                fig3.update_layout(height=340, plot_bgcolor="white")
-                st.plotly_chart(fig3, use_container_width=True)
+                fig3 = px.line(pd.DataFrame(puntos), x="Fecha", y="Saldo ($)",
+                               markers=True,
+                               color_discrete_sequence=["#0F5C3B"])
+                fig3.update_traces(
+                    line=dict(width=2.5),
+                    marker=dict(size=7, color="white", line=dict(color="#0F5C3B", width=2.5)),
+                    fill="tozeroy",
+                    fillcolor="rgba(47,174,96,0.08)",
+                )
+                fig3.add_hline(y=0, line_dash="dot", line_color="#E5533D",
+                               line_width=1.5, opacity=0.6)
+                fig3.update_layout(
+                    height=300,
+                    plot_bgcolor="white", paper_bgcolor="white",
+                    font=dict(family="Inter, sans-serif", color="#12241C", size=11),
+                    margin=dict(l=8, r=8, t=8, b=8),
+                    xaxis=dict(showgrid=False, linecolor="#E7ECE8",
+                               tickfont=dict(size=10, color="#7A8A80"), title=""),
+                    yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
+                               linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
+                               tickprefix="$", title=""),
+                    modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
+                                    "zoomOut2d","autoScale2d","resetScale2d",
+                                    "toImage","sendDataToCloud"],
+                )
+                st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
         else:
             st.info("⬇️ Aún no tienes movimientos. ¡Agrega uno abajo!")
 
@@ -815,8 +875,6 @@ else:
     # ══════════════════════════════════════════
     # SECCIÓN 3: ACADEMIA FINANCIERA
     # ══════════════════════════════════════════
-    elif opcion_menu == "📚 Academia Financiera":
-        render_academia(user_id, registrar_accion)
 
     # ══════════════════════════════════════════
     # SECCIÓN 4: ASISTENTE POLIBANK
@@ -909,3 +967,25 @@ else:
                     st.session_state["chat_historial"] = []
                     st.session_state["chat_input_key"] += 1
                     st.rerun()
+
+    elif opcion_menu == "📚 Academia Financiera":
+
+        # Banner TikTok
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#010101,#69C9D0);
+                    border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:16px;">
+          <div style="color:white;font-size:1rem;font-weight:700;margin-bottom:4px;">
+            \U0001f4f1 \u00a1S\u00edguenos en TikTok para contenido nuevo cada semana!
+          </div>
+          <div style="color:#ddd;font-size:0.82rem;">@polibank_ \u00b7 Tips de finanzas para universitarios</div>
+        </div>
+        """, unsafe_allow_html=True)
+        _, col_tik, _ = st.columns([1, 2, 1])
+        with col_tik:
+            st.link_button("\U0001f3b5 Ir al TikTok de Polibank",
+                           "https://www.tiktok.com/@polibank_?lang=es-419",
+                           use_container_width=True)
+        st.divider()
+
+        # Sistema de lecciones estilo Duolingo
+        render_academia(user_id, registrar_accion)
