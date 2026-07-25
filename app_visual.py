@@ -8,6 +8,7 @@ from app.database import (
 )
 from app.gamificacion import registrar_accion, obtener_estado, BADGES
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.express as px
 from app.ai_core import clasificar_gasto, asistente_general
@@ -224,15 +225,24 @@ st.markdown(f"""
   div[role="radiogroup"] {{
     gap: 8px;
     flex-wrap: wrap;
+    align-items: stretch;
   }}
   div[role="radiogroup"] label {{
     background: #FFFFFF;
     border: 1px solid #E7ECE8;
     border-radius: 100px;
-    padding: 8px 16px;
+    padding: 10px 16px;
     font-weight: 600;
     font-size: 0.85rem;
+    line-height: 1.1;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
     transition: all 0.15s ease;
+  }}
+  div[role="radiogroup"] label p {{
+    white-space: nowrap;
+    margin: 0;
   }}
   div[role="radiogroup"] label:has(input:checked) {{
     background: {COLOR_VERDE};
@@ -300,12 +310,14 @@ _logo_tag = (
 DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
             "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+ZONA_ECUADOR = ZoneInfo("America/Guayaquil")
 
 
 def _saludo_contextual(nombre: str) -> dict:
     """El saludo cambia en 3 franjas; el fondo (día/noche) en 2, para
-    mantenerlo simple y confiable."""
-    hora = datetime.now().hour
+    mantenerlo simple y confiable. Usa siempre la hora de Ecuador, sin
+    importar en qué servidor/huso horario esté corriendo la app."""
+    hora = datetime.now(ZONA_ECUADOR).hour
     es_dia = 5 <= hora < 19
     if 5 <= hora < 12:
         saludo, icono = f"¡Buenos días, {nombre}!", "☀️"
@@ -391,7 +403,7 @@ else:
     correo_user = st.session_state["usuario_conectado"]["correo"]
     nombre_user = correo_user.split("@")[0].capitalize()
 
-    ahora = datetime.now()
+    ahora = datetime.now(ZONA_ECUADOR)
     ctx = _saludo_contextual(nombre_user)
     subtitulo = f"{DIAS_ES[ahora.weekday()]} {ahora.day} de {MESES_ES[ahora.month - 1]} · {ahora.strftime('%I:%M %p').lstrip('0')}"
 
