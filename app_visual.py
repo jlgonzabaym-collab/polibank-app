@@ -504,13 +504,15 @@ else:
                                tickfont=dict(size=10, color="#7A8A80"), title=""),
                     yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
                                linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
-                               tickprefix="$", title=""),
+                               tickprefix="$", title="", fixedrange=True),
+                    xaxis_fixedrange=False,
+                    dragmode="pan",
                     bargap=0.25, bargroupgap=0.1,
                     modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
                                     "zoomOut2d","autoScale2d","resetScale2d",
                                     "toImage","sendDataToCloud"],
                 )
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "staticPlot": False})
 
             with tab_categorias:
                 cat_f = {k: v for k, v in cat_totales.items() if v > 0}
@@ -540,12 +542,15 @@ else:
                                    tickprefix="$", title=""),
                         yaxis=dict(showgrid=False, linecolor="#E7ECE8",
                                    tickfont=dict(size=11, color="#12241C"),
-                                   title="", categoryorder="total ascending"),
+                                   title="", categoryorder="total ascending",
+                                   fixedrange=True),
+                        xaxis_fixedrange=True,
+                        dragmode=False,
                         modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
                                         "zoomOut2d","autoScale2d","resetScale2d",
                                         "toImage","sendDataToCloud"],
                     )
-                    st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
+                    st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "staticPlot": False})
                     cat_max = max(cat_f, key=cat_f.get)
                     st.markdown(
                         f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>',
@@ -579,12 +584,14 @@ else:
                                tickfont=dict(size=10, color="#7A8A80"), title=""),
                     yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
                                linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
-                               tickprefix="$", title=""),
+                               tickprefix="$", title="", fixedrange=True),
+                    xaxis_fixedrange=False,
+                    dragmode="pan",
                     modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
                                     "zoomOut2d","autoScale2d","resetScale2d",
                                     "toImage","sendDataToCloud"],
                 )
-                st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False, "staticPlot": False})
         else:
             st.info("⬇️ Aún no tienes movimientos. ¡Agrega uno abajo!")
 
