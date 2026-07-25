@@ -17,6 +17,7 @@ from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
 from academia_ui import render_academia
+from leaderboard import render_leaderboard, sumar_xp_semanal
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ─────────────────────────────────────────────
@@ -832,6 +833,7 @@ else:
                             res_gami = registrar_accion(user_id, "ingreso", {
                                 "_saldo_positivo": (total_ingresos + monto_ing - total_egresos) > 0
                             })
+                            sumar_xp_semanal(user_id, res_gami["xp_ganado"])
                             st.session_state["gami_notif"] = res_gami
                             msg_ok = f"✅ Ingreso de ${monto_ing:.2f} guardado · +{res_gami['xp_ganado']} XP ⭐"
                             if url_factura:
@@ -911,6 +913,7 @@ else:
                         )
                         if exito:
                             res_gami = registrar_accion(user_id, "gasto")
+                            sumar_xp_semanal(user_id, res_gami["xp_ganado"])
                             st.session_state["gami_notif"] = res_gami
                             msg_ok = (
                                 f"✅ Gasto guardado · Categoría: **{cat_ia.upper()}** "
@@ -1022,10 +1025,10 @@ else:
     # ══════════════════════════════════════════
     elif opcion_menu == "🏆 Mi Progreso":
 
-        # 'gami' ya se cargó arriba para el widget del sidebar — reutilizarlo
-        # evita una segunda consulta idéntica a la base de datos en cada carga.
+        gami = obtener_estado(user_id)
         racha_emoji = "🔥" if gami["racha_viva"] else "💤"
 
+        # ── Hero card progreso
         st.markdown(f"""
         <div class="gami-hero">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
@@ -1066,63 +1069,60 @@ else:
         if not gami["racha_viva"] and gami["racha_actual"] == 0:
             st.info("💡 Registra un ingreso o gasto hoy para iniciar tu racha.")
         elif gami["racha_viva"]:
-            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>',
-                        unsafe_allow_html=True)
+            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>', unsafe_allow_html=True)
         else:
             st.warning("⚠️ Tu racha se rompió. ¡Registra un movimiento hoy para reiniciarla!")
 
         if gami["racha_maxima"] > 0:
             st.caption(f"🏆 Tu récord personal: **{gami['racha_maxima']} días** seguidos")
 
-        st.divider()
+        # Tabs: Logros | Ranking
+        tab_logros, tab_ranking = st.tabs(["🏅 Mis Logros", "🏆 Ranking Semanal"])
 
-        st.subheader("⭐ ¿Cómo ganar XP?")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown("""
+        with tab_logros:
+            st.subheader("⭐ ¿Cómo ganar XP?")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("""
 | Acción | XP |
 |--------|-----|
 | 🛒 Registrar un gasto | +10 XP |
 | 💵 Registrar un ingreso | +5 XP |
 | 🎬 Visitar la Academia | +15 XP |
 | 🔐 Hacer login | +2 XP |
-            """)
-        with col_b:
-            st.markdown("""
+| 📚 Completar un curso | +25 XP |
+                """)
+            with col_b:
+                st.markdown("""
 | Nivel | XP Requerido |
 |-------|-------------|
 | 1 · Principiante | 0 XP |
 | 2 · Estudiante | 100 XP |
 | 3 · Analista | 500 XP |
 | 4 · Experto | 1000 XP |
-            """)
+                """)
 
-        st.divider()
+            st.divider()
+            st.subheader("🏅 Colección de Logros")
+            badges_usuario = gami["badges"] or []
+            cards_html = '<div class="badge-grid">'
+            for clave, info in BADGES.items():
+                desbloqueado = clave in badges_usuario
+                clase = "badge-card desbloqueado" if desbloqueado else "badge-card bloqueado"
+                icono = info["emoji"] if desbloqueado else "🔒"
+                cards_html += f"""
+                <div class="{clase}">
+                  <div class="badge-emoji">{icono}</div>
+                  <div class="badge-nombre">{info['nombre']}</div>
+                  <div class="badge-desc">{info['desc']}</div>
+                </div>"""
+            cards_html += '</div>'
+            st.markdown(cards_html, unsafe_allow_html=True)
 
-        st.subheader("🏅 Colección de Logros")
-        badges_usuario = gami["badges"] or []
-        cards_html = '<div class="badge-grid">'
-        for clave, info in BADGES.items():
-            desbloqueado = clave in badges_usuario
-            clase = "badge-card desbloqueado" if desbloqueado else "badge-card bloqueado"
-            icono = info["emoji"] if desbloqueado else "🔒"
-            cards_html += f"""
-            <div class="{clase}">
-              <div class="badge-emoji">{icono}</div>
-              <div class="badge-nombre">{info['nombre']}</div>
-              <div class="badge-desc">{info['desc']}</div>
-            </div>"""
-        cards_html += '</div>'
-        st.markdown(cards_html, unsafe_allow_html=True)
+        with tab_ranking:
+            render_leaderboard(user_id)
 
 
-    # ══════════════════════════════════════════
-    # SECCIÓN 3: ACADEMIA FINANCIERA
-    # ══════════════════════════════════════════
-
-    # ══════════════════════════════════════════
-    # SECCIÓN 4: ASISTENTE POLIBANK
-    # ══════════════════════════════════════════
     elif opcion_menu == "🐢 Asistente Polibank":
 
         st.markdown(f"""
