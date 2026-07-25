@@ -223,25 +223,32 @@ st.markdown(f"""
 
   /* Menú principal horizontal (antes en el sidebar) — estilo de pastillas */
   div[role="radiogroup"] {{
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
-    flex-wrap: wrap;
-    align-items: stretch;
   }}
   div[role="radiogroup"] label {{
     background: #FFFFFF;
     border: 1px solid #E7ECE8;
     border-radius: 100px;
-    padding: 10px 16px;
+    padding: 10px 10px;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     line-height: 1.1;
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: center;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    box-sizing: border-box;
     transition: all 0.15s ease;
   }}
   div[role="radiogroup"] label p {{
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin: 0;
   }}
   div[role="radiogroup"] label:has(input:checked) {{
