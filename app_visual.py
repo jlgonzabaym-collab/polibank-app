@@ -422,11 +422,20 @@ def _saludo_contextual(nombre: str) -> dict:
 
 
 # Restaurar sesión desde la cookie (si existe) antes de decidir qué mostrar
-if "usuario_conectado" not in st.session_state:
+# NOTA: justo después de un logout explícito NO intentamos restaurar todavía,
+# porque EncryptedCookieManager tarda un ciclo de renderizado extra en
+# sincronizar el borrado con el navegador. Sin este chequeo, cookies.get()
+# aquí sigue devolviendo el valor viejo y el usuario "vuelve a entrar" solo.
+if "usuario_conectado" not in st.session_state and not st.session_state.get("sesion_recien_cerrada"):
     _cookie_id = cookies.get("usuario_id")
     _cookie_correo = cookies.get("usuario_correo")
     if _cookie_id and _cookie_correo:
         st.session_state["usuario_conectado"] = {"id": int(_cookie_id), "correo": _cookie_correo}
+
+# Una vez que ya pasamos por este chequeo una vez tras el logout, se puede
+# volver a intentar restaurar en futuros reruns (por ejemplo si el usuario
+# hace login de nuevo, ese bloque setea usuario_conectado directamente).
+st.session_state["sesion_recien_cerrada"] = False
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
@@ -554,6 +563,9 @@ else:
                 if "usuario_correo" in cookies:
                     del cookies["usuario_correo"]
                 cookies.save()
+                # Evita que el próximo rerun restaure la sesión leyendo la
+                # cookie vieja (el borrado aún no se sincronizó al navegador).
+                st.session_state["sesion_recien_cerrada"] = True
                 st.rerun()
 
 

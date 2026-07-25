@@ -232,34 +232,46 @@ def render_leaderboard(usuario_id: int):
         return
 
     # ── TOP 3 PODIO
+    # Estos arrays están indexados por RANGO REAL (0 = 1er lugar del ranking,
+    # 1 = 2do, 2 = 3ro). Antes se indexaban con la posición dentro del orden
+    # visual, lo que hacía que con 1 o 2 usuarios el líder real terminara
+    # etiquetado como "2° lugar" con estilo de plata.
     top3 = ranking[:3]
-    orden_podio = [1, 0, 2] if len(top3) >= 3 else list(range(len(top3)))
-    medallas    = ["🥈", "🥇", "🥉"]
-    clases      = ["p2", "p1", "p3"]
-    posiciones  = ["2° lugar", "1° lugar", "3° lugar"]
+    medallas    = ["🥇", "🥈", "🥉"]
+    clases      = ["p1", "p2", "p3"]
+    posiciones  = ["1° lugar", "2° lugar", "3° lugar"]
 
-    html_podio = '<div class="lb-top3">'
-    for idx in orden_podio:
-        if idx >= len(top3): continue
-        u   = top3[idx]
-        cls = clases[idx]
-        med = medallas[idx]
-        pos = posiciones[idx]
-        es_lider = idx == 0
+    # Orden VISUAL de las columnas (izq, centro, der): 2°, 1°, 3° cuando hay
+    # podio completo; si hay menos usuarios, se muestran en orden de rango.
+    orden_visual = [1, 0, 2] if len(top3) >= 3 else list(range(len(top3)))
+
+    tarjetas = []
+    for rango in orden_visual:
+        if rango >= len(top3):
+            continue
+        u   = top3[rango]
+        cls = clases[rango]
+        med = medallas[rango]
+        pos = posiciones[rango]
+        es_lider = rango == 0
         shimmer  = '<div class="shimmer"></div>' if es_lider else ""
         corona   = '<span class="corona">👑</span>' if es_lider else f'<div class="podio-med">{med}</div>'
         es_yo    = u["usuario_id"] == usuario_id
         nombre   = u["nombre"] + (" (tú)" if es_yo else "")
 
-        html_podio += f"""
-        <div class="podio-card {cls}">
-          {shimmer}
-          {corona}
-          <div class="podio-pos">{pos}</div>
-          <div class="podio-name">{nombre}</div>
-          <div class="podio-xp"><strong>{u['xp']}</strong> XP</div>
-        </div>"""
-    html_podio += "</div>"
+        # Todo en una sola línea (sin saltos ni sangría): así evitamos que
+        # Streamlit/Markdown interprete líneas vacías o indentadas como
+        # bloques de código y muestre las etiquetas HTML como texto plano.
+        tarjeta = (
+            f'<div class="podio-card {cls}">{shimmer}{corona}'
+            f'<div class="podio-pos">{pos}</div>'
+            f'<div class="podio-name">{nombre}</div>'
+            f'<div class="podio-xp"><strong>{u["xp"]}</strong> XP</div>'
+            f'</div>'
+        )
+        tarjetas.append(tarjeta)
+
+    html_podio = '<div class="lb-top3">' + "".join(tarjetas) + "</div>"
     st.markdown(html_podio, unsafe_allow_html=True)
 
     # ── LISTA DESDE PUESTO 4
