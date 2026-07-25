@@ -1,4 +1,6 @@
 import streamlit as st
+import base64
+from pathlib import Path
 from app.database import (
     registrar_usuario, login_usuario,
     guardar_movimiento, obtener_movimientos,
@@ -19,108 +21,243 @@ from academia_ui import render_academia
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Polibank", page_icon="🐢", layout="centered")
 
-COLOR_VERDE       = "#1B8A4C"
-COLOR_VERDE_CLARO = "#27AE60"
-COLOR_ROJO        = "#E74C3C"
-COLOR_AZUL        = "#2E86AB"
-COLOR_ORO         = "#F39C12"
+COLOR_VERDE = "#0F5C3B"        # Verde oscuro del logo (faceta izquierda)
+COLOR_VERDE_CLARO = "#2FAE60"  # Verde brillante del logo (faceta derecha) — ingresos
+COLOR_MENTA = "#A6E8C8"        # Verde menta del logo (base) — acento de marca
+COLOR_ROJO = "#E5533D"         # Gastos / alertas
+COLOR_AZUL = "#2E6F9E"         # Neutral / informativo
+COLOR_ORO = "#E8A722"          # XP / logros
+COLOR_TINTA = "#12241C"        # Texto principal, con matiz verdoso sutil
+COLOR_FONDO = "#F5FBF7"        # Fondo de app, menta muy claro (del logo)
 
 supabase_client = create_client(SUPABASE_URL.strip().rstrip('/'), SUPABASE_KEY.strip())
 
-
 st.markdown(f"""
 <style>
-  .block-container {{ padding-top: 1.5rem; }}
-  .metric-card {{
-    background: white; border-radius: 12px; padding: 18px 16px;
-    text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border-left: 4px solid {COLOR_VERDE};
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+
+  /* Se oculta solo el toolbar (botón "Deploy", menú de tres puntos) —
+     NO el header completo, para no romper accesos nativos de Streamlit. */
+  [data-testid="stToolbar"] {{visibility: hidden;}}
+  #MainMenu {{visibility: hidden;}}
+  footer {{visibility: hidden;}}
+
+  html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; color: {COLOR_TINTA}; }}
+  h1, h2, h3, .metric-value, .gami-stat-val {{ font-family: 'Sora', sans-serif; }}
+
+  /* Blindaje contra el modo oscuro del navegador: sin esto, Streamlit
+     puede pintar títulos y texto en blanco sobre nuestro fondo claro. */
+  [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{ background: {COLOR_FONDO} !important; }}
+  h1, h2, h3, h4, p, span, label, .stMarkdown, [data-testid="stMarkdownContainer"] {{ color: {COLOR_TINTA} !important; }}
+  [data-testid="stCaptionContainer"] {{ color: #6B7A70 !important; }}
+
+  .stApp {{ background: {COLOR_FONDO}; }}
+
+  /* Raya indicadora de la pestaña activa (elemento aparte del texto) */
+  [data-baseweb="tab-highlight"] {{ background-color: {COLOR_VERDE} !important; }}
+
+  /* Márgenes limpios para aprovechar la pantalla del celular al máximo */
+  .block-container {{ padding: 1.25rem 1rem 3rem 1rem !important; max-width: 100%; }}
+
+  /* Tarjetas: sin bordes agresivos, redondeadas y sombras súper suaves */
+  .metric-card, .mov-row, .gami-stat, .badge-card, .sidebar-gami {{
+    background: #FFFFFF;
+    border-radius: 20px;
+    border: 1px solid #EDF1EE !important;
+    box-shadow: 0 6px 20px rgba(20,40,30,0.04) !important;
   }}
-  .metric-card.rojo {{ border-left-color: {COLOR_ROJO}; }}
-  .metric-card.azul {{ border-left-color: {COLOR_AZUL}; }}
-  .metric-label {{ font-size:0.78rem; color:#666; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }}
-  .metric-value {{ font-size:1.6rem; font-weight:800; color:#1a1a1a; }}
-  .metric-value.verde {{ color:{COLOR_VERDE}; }}
-  .metric-value.rojo  {{ color:{COLOR_ROJO};  }}
-  .metric-value.azul  {{ color:{COLOR_AZUL};  }}
-  .badge-cat {{ display:inline-block; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }}
-  .badge-comida     {{ background:#FFF3CD; color:#856404; }}
-  .badge-transporte {{ background:#D1ECF1; color:#0C5460; }}
-  .badge-estudios   {{ background:#D4EDDA; color:#155724; }}
-  .badge-diversion  {{ background:#F8D7DA; color:#721C24; }}
-  .badge-otros      {{ background:#E2E3E5; color:#383D41; }}
-  .badge-ingresos   {{ background:#D4EDDA; color:#155724; }}
-  .alerta-negativo {{
-    background:#FFF3CD; border-left:4px solid #FFC107; border-radius:8px;
-    padding:12px 16px; margin:12px 0; font-weight:600; color:#856404;
+
+  /* Métricas (Dashboard): Saldo imponente y claro */
+  .metric-card {{ padding: 20px 16px; text-align: center; margin-bottom: 12px; }}
+  .metric-label {{ font-size: 0.68rem; color: #7A8A80; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 6px; }}
+  .metric-value {{ font-size: 1.9rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }}
+  .metric-value.verde {{ color: {COLOR_VERDE}; }}
+  .metric-value.rojo  {{ color: {COLOR_ROJO};  }}
+  .metric-value.azul  {{ color: {COLOR_TINTA}; }} /* saldo neutro: oscuro para dar seriedad */
+
+  /* Inputs refinados (estilo iOS) — se apunta a data-baseweb porque las
+     clases .stTextInput/.stNumberInput cambian entre versiones de Streamlit,
+     mientras que data-baseweb es de la librería interna y es mucho más estable. */
+  [data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="datepicker"] input {{
+    border-radius: 14px !important;
+    background-color: #F1F4F1 !important;
+    border: 1.5px solid transparent !important;
+    box-shadow: none !important;
   }}
-  .tip-box {{
-    background:#EAF6EE; border-left:4px solid {COLOR_VERDE}; border-radius:8px;
-    padding:12px 16px; margin:10px 0; font-size:0.88rem; color:#1a5c34;
+  [data-baseweb="input"] input, [data-baseweb="select"] input,
+  [data-baseweb="datepicker"] input, [data-baseweb="input"] textarea {{
+    background-color: transparent !important;
+    color: {COLOR_TINTA} !important;
   }}
-  .mov-row {{
-    background: white; border-radius: 10px; padding: 12px 16px;
-    margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-    border-left: 3px solid #e8e8e8;
+  [data-baseweb="input"]:focus-within, [data-baseweb="select"] > div:focus-within {{
+    border-color: {COLOR_VERDE} !important;
+    background-color: #FFFFFF !important;
   }}
-  .mov-row.ingreso {{ border-left-color: {COLOR_VERDE}; }}
-  .mov-row.gasto   {{ border-left-color: {COLOR_ROJO}; }}
-  .mov-detalle  {{ font-size:0.88rem; color:#555; }}
-  .mov-monto    {{ font-size:1.05rem; font-weight:800; }}
-  /* GAMIFICACIÓN */
+  [data-baseweb="select"] svg, [data-baseweb="datepicker"] svg {{ fill: {COLOR_TINTA} !important; }}
+
+  /* Botones +/- del number_input y menú desplegable del selectbox */
+  [data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"] {{
+    background-color: #F1F4F1 !important;
+    color: {COLOR_TINTA} !important;
+  }}
+  [data-baseweb="popover"] [data-baseweb="menu"] {{
+    background-color: #FFFFFF !important;
+  }}
+  [data-baseweb="menu"] li {{ color: {COLOR_TINTA} !important; }}
+
+  /* Subidor de archivos */
+  [data-testid="stFileUploaderDropzone"] {{
+    background-color: #F1F4F1 !important;
+    border-radius: 14px !important;
+    border: 1.5px dashed #C7D2C9 !important;
+  }}
+  [data-testid="stFileUploaderDropzone"] * {{ color: {COLOR_TINTA} !important; }}
+  [data-testid="stFileUploaderDropzoneInstructions"] svg {{ fill: {COLOR_TINTA} !important; }}
+
+  /* Botones — varios selectores porque el testid cambió de nombre entre versiones */
+  .stButton>button, [data-testid^="stBaseButton"], [data-testid="stFormSubmitButton"]>button {{
+    background-color: {COLOR_VERDE} !important;
+    color: #FFFFFF !important;
+    border-radius: 100px !important;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 12px 22px;
+    border: none !important;
+    box-shadow: 0 6px 16px rgba(15,92,59,0.15);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }}
+  .stButton>button p, [data-testid^="stBaseButton"] p, [data-testid="stFormSubmitButton"] p {{ color: #FFFFFF !important; }}
+  .stButton>button:active, [data-testid^="stBaseButton"]:active {{ transform: scale(0.96); box-shadow: none; }}
+  .stButton>button:focus-visible, [data-testid^="stBaseButton"]:focus-visible {{ outline: 2px solid {COLOR_VERDE}; outline-offset: 2px; }}
+
+  /* Pestañas (Tabs) más sutiles y elegantes */
+  .stTabs [data-baseweb="tab-list"] {{ gap: 20px; border-bottom: 1px solid #E7ECE8; }}
+  .stTabs [data-baseweb="tab"] {{ padding: 10px 2px; background: transparent; font-weight: 600; color: #6B7A70; }}
+  .stTabs [aria-selected="true"] {{ color: {COLOR_VERDE} !important; }}
+
+  /* Filas del historial de movimientos */
+  .mov-row {{ padding: 14px 16px; margin-bottom: 10px; display: flex; flex-direction: column; }}
+  .mov-detalle {{ font-size: 0.92rem; color: {COLOR_TINTA}; font-weight: 600; margin-top: 6px; }}
+  .mov-monto {{ font-size: 1.1rem; font-weight: 800; }}
+
+  /* Etiquetas de categorías pulidas (píldoras de colores pastel) */
+  .badge-cat {{ display:inline-block; padding:5px 12px; border-radius:100px; font-size:0.66rem; font-weight:800; letter-spacing: 0.4px; }}
+  .badge-comida     {{ background:#FFF1EF; color:#C43D2A; }}
+  .badge-transporte {{ background:#EEF3FC; color:{COLOR_AZUL}; }}
+  .badge-estudios   {{ background:{COLOR_MENTA}33; color:{COLOR_VERDE}; }}
+  .badge-diversion  {{ background:#FFF6E4; color:#B9790A; }}
+  .badge-otros      {{ background:#F1F3F1; color:#5F6E64; }}
+  .badge-ingresos   {{ background:{COLOR_MENTA}33; color:{COLOR_VERDE}; }}
+
+  /* Alertas y Tips informativos */
+  .alerta-negativo {{ background:#FFF3E9; border-radius:14px; padding:14px 18px; font-weight:600; color:#9A5B10; font-size: 0.88rem; }}
+  .tip-box {{ background:{COLOR_MENTA}33; border-radius:14px; padding:14px 18px; margin:14px 0; font-size:0.88rem; color:{COLOR_VERDE}; font-weight: 600; }}
+
+  /* Sección de Gamificación (Hero Banner) */
   .gami-hero {{
-    background: linear-gradient(135deg, #1B8A4C, #27AE60);
-    border-radius: 16px; padding: 24px; color: white; margin-bottom: 20px;
+    background: linear-gradient(135deg, {COLOR_VERDE}, #0A3D27);
+    border-radius: 24px;
+    padding: 28px 22px;
+    color: white;
+    margin-bottom: 20px;
+    box-shadow: 0 12px 28px rgba(15,92,59,0.22);
+    border-top: 3px solid {COLOR_MENTA};
   }}
-  .gami-stat-grid {{
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;
-  }}
-  .gami-stat {{
-    background: white; border-radius: 10px; padding: 14px;
-    text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  }}
-  .gami-stat-val {{ font-size: 1.9rem; font-weight: 800; line-height: 1.1; }}
-  .gami-stat-lbl {{ font-size: 0.72rem; color: #888; font-weight: 600; text-transform: uppercase; margin-top: 4px; }}
-  .xp-bar-wrap {{
-    background: rgba(255,255,255,0.25); border-radius: 20px; height: 10px;
-    margin: 10px 0 6px; overflow: hidden;
-  }}
-  .xp-bar-fill {{ height: 10px; border-radius: 20px; background: white; }}
+  .gami-stat-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }}
+  .gami-stat {{ background: transparent; box-shadow: none !important; border: 1px solid #E7ECE8 !important; padding: 14px 8px; text-align: center; }}
+  .gami-stat-val {{ font-size: 1.7rem; font-weight: 800; line-height: 1.1; }}
+  .gami-stat-lbl {{ font-size: 0.62rem; color: #8B988F; font-weight: 700; text-transform: uppercase; margin-top: 6px; letter-spacing: 0.4px; }}
+
+  /* Píldora de nivel — antes sin padding/tipografía, quedaba invisible */
   .nivel-pill {{
-    display: inline-block; background: rgba(255,255,255,0.2); border-radius: 20px;
-    padding: 3px 14px; font-size: 0.8rem; font-weight: 700; margin-left: 10px;
+    display: inline-block;
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(4px);
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-left: auto;
   }}
-  .badge-grid {{
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 12px;
+
+  /* Barra de progreso de XP — antes no existía en el CSS, no se veía */
+  .xp-bar-wrap {{
+    width: 100%;
+    height: 8px;
+    background: rgba(166,232,200,0.25);
+    border-radius: 100px;
+    overflow: hidden;
+    margin: 6px 0;
   }}
-  .badge-card {{
-    background: white; border-radius: 12px; padding: 14px 10px;
-    text-align: center; border: 2px solid #e8e8e8;
+  .xp-bar-fill {{
+    height: 100%;
+    background: {COLOR_ORO};
+    border-radius: 100px;
+    transition: width 0.4s ease;
   }}
-  .badge-card.desbloqueado {{ border-color: {COLOR_VERDE}; background: #f0faf4; }}
-  .badge-card.bloqueado    {{ opacity: 0.4; }}
-  .badge-emoji  {{ font-size: 2rem; margin-bottom: 6px; }}
-  .badge-nombre {{ font-size: 0.78rem; font-weight: 700; color: #333; }}
-  .badge-desc   {{ font-size: 0.66rem; color: #888; margin-top: 3px; }}
+
+  /* Logros/Badges */
+  .badge-card {{ padding: 20px 12px; background: #F8FAF8; border: 1px solid #EDF1EE !important; border-radius: 20px; text-align: center; }}
+  .badge-card.desbloqueado {{ background: #FFFFFF; box-shadow: 0 8px 20px rgba(20,40,30,0.05) !important; }}
+  .badge-card.bloqueado {{ opacity: 0.55; }}
+
+  /* Grilla de logros — antes no existía, las tarjetas quedaban apiladas sin orden */
+  .badge-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }}
+  .badge-emoji {{ font-size: 1.8rem; margin-bottom: 6px; }}
+  .badge-nombre {{ font-size: 0.82rem; font-weight: 700; color: {COLOR_TINTA}; margin-bottom: 4px; }}
+  .badge-desc {{ font-size: 0.72rem; color: #7A8A80; line-height: 1.3; }}
+
+  /* Notificaciones elegantes (Toasts) */
   .toast-nuevo {{
-    background: {COLOR_VERDE}; color: white; border-radius: 10px;
-    padding: 12px 18px; margin: 6px 0; font-weight: 700; font-size: 0.95rem;
+    background: {COLOR_TINTA};
+    color: white;
+    border-radius: 100px;
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 0.86rem;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    margin-bottom: 10px;
   }}
-  .sidebar-gami {{
-    background:#f0faf4; border-radius:10px; padding:12px; text-align:center;
-    margin-bottom:16px; border: 1px solid #c3e6cb;
+
+  /* Menú principal horizontal (antes en el sidebar) — estilo de pastillas */
+  div[role="radiogroup"] {{
+    gap: 8px;
+    flex-wrap: wrap;
   }}
+  div[role="radiogroup"] label {{
+    background: #FFFFFF;
+    border: 1px solid #E7ECE8;
+    border-radius: 100px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.15s ease;
+  }}
+  div[role="radiogroup"] label:has(input:checked) {{
+    background: {COLOR_VERDE};
+    border-color: {COLOR_VERDE};
+  }}
+  div[role="radiogroup"] label:has(input:checked) p {{
+    color: #FFFFFF !important;
+  }}
+  div[role="radiogroup"] input {{ display: none; }}
+  div[role="radiogroup"] > label > div:first-child {{ display: none; }} /* oculta el círculo del radio */
+
+  .sidebar-gami {{ padding: 14px 18px; }}
 </style>
 """, unsafe_allow_html=True)
 
 EMOJI_CAT = {
-    "COMIDA":"🍽️", "TRANSPORTE":"🚌", "ESTUDIOS":"📚",
-    "DIVERSION":"🎮", "OTROS":"📦", "INGRESOS":"💵"
+    "COMIDA": "🍽️", "TRANSPORTE": "🚌", "ESTUDIOS": "📚",
+    "DIVERSION": "🎮", "OTROS": "📦", "INGRESOS": "💵"
 }
+
 
 def badge_cat(categoria: str) -> str:
     cat = categoria.upper()
-    return f'<span class="badge-cat badge-{cat.lower()}">{EMOJI_CAT.get(cat,"📦")} {cat}</span>'
+    return f'<span class="badge-cat badge-{cat.lower()}">{EMOJI_CAT.get(cat, "📦")} {cat}</span>'
+
 
 def subir_factura(archivo, usuario_id: int, mov_descripcion: str) -> str | None:
     """Sube una imagen al bucket 'facturas' de Supabase Storage y devuelve la URL pública."""
@@ -143,12 +280,29 @@ def subir_factura(archivo, usuario_id: int, mov_descripcion: str) -> str | None:
 # ─────────────────────────────────────────────
 # CABECERA
 # ─────────────────────────────────────────────
-col_logo, col_titulo = st.columns([1, 5], vertical_alignment="center")
-with col_logo:
-    st.image("logo_polibank.png", width=110)
-with col_titulo:
-    st.title("Polibank · ESPOL")
+def _logo_en_base64(ruta: str) -> str | None:
+    """Lee el logo del disco y lo devuelve codificado para incrustarlo
+    directo en el HTML — así el tamaño del logo no depende de columnas
+    de Streamlit, que se estiran distinto según el ancho de pantalla."""
+    try:
+        datos = Path(ruta).read_bytes()
+        return base64.b64encode(datos).decode()
+    except Exception:
+        return None
 
+
+_logo_b64 = _logo_en_base64("logo_polibank.png")
+_logo_tag = (
+    f'<img src="data:image/png;base64,{_logo_b64}" style="height:48px;width:auto;display:block;">'
+    if _logo_b64 else "🐢"
+)
+
+st.markdown(f"""
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+  {_logo_tag}
+  <h1 style="margin:0;font-size:1.6rem;font-family:'Sora',sans-serif;">Polibank · ESPOL</h1>
+</div>
+""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
@@ -159,7 +313,7 @@ if "usuario_conectado" not in st.session_state:
     with tab_login:
         st.subheader("Bienvenido de vuelta 👋")
         correo_login = st.text_input("Correo Electrónico", key="login_correo")
-        pass_login   = st.text_input("Contraseña", type="password", key="login_pass")
+        pass_login = st.text_input("Contraseña", type="password", key="login_pass")
         if st.button("Ingresar", key="btn_login_submit", use_container_width=True):
             if correo_login and pass_login:
                 exito, resultado = login_usuario(correo_login, pass_login)
@@ -175,7 +329,7 @@ if "usuario_conectado" not in st.session_state:
     with tab_registro:
         st.subheader("Crea tu cuenta gratis 🐢")
         correo_reg = st.text_input("Correo Electrónico", key="reg_correo")
-        pass_reg   = st.text_input("Contraseña (mínimo 6 caracteres)", type="password", key="reg_pass")
+        pass_reg = st.text_input("Contraseña (mínimo 6 caracteres)", type="password", key="reg_pass")
         if st.button("Registrarse", key="btn_reg_submit", use_container_width=True):
             if correo_reg and pass_reg:
                 if len(pass_reg) < 6:
@@ -191,7 +345,7 @@ if "usuario_conectado" not in st.session_state:
 # BLOQUE B: APP PRINCIPAL
 # ═══════════════════════════════════════════════
 else:
-    user_id     = st.session_state["usuario_conectado"]["id"]
+    user_id = st.session_state["usuario_conectado"]["id"]
     correo_user = st.session_state["usuario_conectado"]["correo"]
 
     col_user, col_logout = st.columns([4, 1])
@@ -204,21 +358,29 @@ else:
 
     st.divider()
 
-    # Mini widget sidebar
+    # Widget de racha — arriba del menú, siempre visible en el contenido principal
     gami = obtener_estado(user_id)
     racha_emoji = "🔥" if gami["racha_viva"] else "💤"
-    st.sidebar.markdown(f"""
-    <div class="sidebar-gami">
-      <div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Tu progreso</div>
-      <div style="font-size:1.6rem;font-weight:800;color:#1B8A4C;margin:4px 0;">{racha_emoji} {gami['racha_actual']} días</div>
-      <div style="font-size:0.75rem;color:#888;">⭐ {gami['xp_total']} XP · Nivel {gami['nivel']} {gami['nivel_nombre']}</div>
+    st.markdown(f"""
+    <div class="sidebar-gami" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-size:0.68rem;color:#7A8A80;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Tu progreso</div>
+        <div style="font-size:1.4rem;font-weight:800;color:{COLOR_VERDE};margin:2px 0;">{racha_emoji} {gami['racha_actual']} días</div>
+      </div>
+      <div style="font-size:0.78rem;color:#7A8A80;text-align:right;">⭐ {gami['xp_total']} XP<br>Nivel {gami['nivel']} · {gami['nivel_nombre']}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    opcion_menu = st.sidebar.radio(
+    # Menú principal — como pestañas horizontales en el contenido principal,
+    # en vez de en el sidebar. Así el menú siempre está a la vista, sin
+    # depender de un botón para abrir/cerrar un panel lateral.
+    opcion_menu = st.radio(
         "📱 Menú Polibank",
-        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"]
+        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"],
+        horizontal=True,
+        label_visibility="collapsed",
     )
+    st.divider()
 
     # Notificación de badges nuevos
     if "gami_notif" in st.session_state:
@@ -226,12 +388,10 @@ else:
         for b in notif.get("badges_nuevos", []):
             info = BADGES.get(b, {})
             st.markdown(
-                f'<div class="toast-nuevo">🏅 ¡Nuevo logro! {info.get("emoji","")} '
-                f'<strong>{info.get("nombre","")}</strong> — {info.get("desc","")}</div>',
+                f'<div class="toast-nuevo">🏅 ¡Nuevo logro! {info.get("emoji", "")} '
+                f'<strong>{info.get("nombre", "")}</strong> — {info.get("desc", "")}</div>',
                 unsafe_allow_html=True
             )
-
-
 
     # ══════════════════════════════════════════
     # SECCIÓN 1: FINANZAS PERSONALES
@@ -242,26 +402,28 @@ else:
 
         # Calcular totales
         total_ingresos = 0.0
-        total_egresos  = 0.0
+        total_egresos = 0.0
         historial_tabla = []
-        datos_por_dia   = {}
-        cat_totales     = {"COMIDA":0.0,"TRANSPORTE":0.0,"ESTUDIOS":0.0,"DIVERSION":0.0,"OTROS":0.0}
+        datos_por_dia = {}
+        cat_totales = {"COMIDA": 0.0, "TRANSPORTE": 0.0, "ESTUDIOS": 0.0, "DIVERSION": 0.0, "OTROS": 0.0}
 
         for mov in movimientos_db:
-            monto_num   = float(mov["monto"])
-            fecha_dt    = datetime.strptime(mov["fecha"], "%Y-%m-%d")
+            monto_num = float(mov["monto"])
+            fecha_dt = datetime.strptime(mov["fecha"], "%Y-%m-%d")
             fecha_label = fecha_dt.strftime("%d-%b")
             if fecha_label not in datos_por_dia:
-                datos_por_dia[fecha_label] = {"Ingresos":0.0,"Egresos":0.0,"_orden":fecha_dt}
-            cat = mov.get("categoria","OTROS").upper()
+                datos_por_dia[fecha_label] = {"Ingresos": 0.0, "Egresos": 0.0, "_orden": fecha_dt}
+            cat = mov.get("categoria", "OTROS").upper()
             if mov["tipo"] == "Ingreso":
                 total_ingresos += monto_num
                 datos_por_dia[fecha_label]["Ingresos"] += monto_num
-                tipo_label = "💵 Ingreso"; monto_texto = f"+${monto_num:.2f}"
+                tipo_label = "💵 Ingreso";
+                monto_texto = f"+${monto_num:.2f}"
             else:
                 total_egresos += monto_num
                 datos_por_dia[fecha_label]["Egresos"] += monto_num
-                tipo_label = "🛒 Gasto"; monto_texto = f"-${monto_num:.2f}"
+                tipo_label = "🛒 Gasto";
+                monto_texto = f"-${monto_num:.2f}"
                 cat_totales[cat if cat in cat_totales else "OTROS"] += monto_num
             historial_tabla.append({
                 "Fecha": fecha_label, "Tipo": tipo_label, "Detalle": mov["detalle"],
@@ -277,21 +439,31 @@ else:
         st.subheader("📊 Resumen de tu Cuenta")
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown(f'<div class="metric-card"><div class="metric-label">Ingresos</div><div class="metric-value verde">${total_ingresos:,.2f}</div></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-label">Ingresos</div><div class="metric-value verde">${total_ingresos:,.2f}</div></div>',
+                unsafe_allow_html=True)
         with c2:
-            st.markdown(f'<div class="metric-card rojo"><div class="metric-label">Gastos</div><div class="metric-value rojo">${total_egresos:,.2f}</div></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-label">Gastos</div><div class="metric-value rojo">${total_egresos:,.2f}</div></div>',
+                unsafe_allow_html=True)
         with c3:
             color_bal = "verde" if balance >= 0 else "rojo"
-            st.markdown(f'<div class="metric-card azul"><div class="metric-label">Saldo</div><div class="metric-value {color_bal}">${balance:,.2f}</div></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-label">Saldo</div><div class="metric-value {color_bal}">${balance:,.2f}</div></div>',
+                unsafe_allow_html=True)
 
         if balance < 0:
-            st.markdown('<div class="alerta-negativo">⚠️ Tu saldo está en negativo. Revisa tus gastos.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="alerta-negativo">⚠️ Tu saldo está en negativo. Revisa tus gastos.</div>',
+                        unsafe_allow_html=True)
 
         if total_ingresos > 0 and total_egresos > 0:
             pct = ((total_ingresos - total_egresos) / total_ingresos) * 100
-            if pct >= 20:   tip = f"🎉 Estás ahorrando el {pct:.0f}% de tus ingresos. ¡Excelente!"
-            elif pct > 0:   tip = f"💡 Ahorras el {pct:.0f}%. La meta recomendada es el 20%."
-            else:           tip = "📉 Gastas más de lo que ganas. Identifica gastos no esenciales."
+            if pct >= 20:
+                tip = f"🎉 Estás ahorrando el {pct:.0f}% de tus ingresos. ¡Excelente!"
+            elif pct > 0:
+                tip = f"💡 Ahorras el {pct:.0f}%. La meta recomendada es el 20%."
+            else:
+                tip = "📉 Gastas más de lo que ganas. Identifica gastos no esenciales."
             st.markdown(f'<div class="tip-box">{tip}</div>', unsafe_allow_html=True)
 
         st.write("")
@@ -306,48 +478,51 @@ else:
             with tab_barras:
                 filas = []
                 for fl, m in dias_ord:
-                    filas += [{"Fecha":fl,"Monto ($)":m["Ingresos"],"Tipo":"Ingresos"},
-                               {"Fecha":fl,"Monto ($)":m["Egresos"],"Tipo":"Egresos"}]
+                    filas += [{"Fecha": fl, "Monto ($)": m["Ingresos"], "Tipo": "Ingresos"},
+                              {"Fecha": fl, "Monto ($)": m["Egresos"], "Tipo": "Egresos"}]
                 fig = px.bar(pd.DataFrame(filas), x="Fecha", y="Monto ($)", color="Tipo",
                              barmode="group", text_auto='.2f',
-                             color_discrete_map={"Ingresos":COLOR_VERDE_CLARO,"Egresos":COLOR_ROJO})
+                             color_discrete_map={"Ingresos": COLOR_VERDE_CLARO, "Egresos": COLOR_ROJO})
                 fig.update_layout(height=360, plot_bgcolor="white")
                 st.plotly_chart(fig, use_container_width=True)
 
             with tab_categorias:
                 # Barras horizontales por categoría
-                cat_f = {k:v for k,v in cat_totales.items() if v > 0}
+                cat_f = {k: v for k, v in cat_totales.items() if v > 0}
                 if cat_f:
                     df_cat = pd.DataFrame([
-                        {"Categoría": f"{EMOJI_CAT.get(k,'📦')} {k}", "Monto ($)": v}
+                        {"Categoría": f"{EMOJI_CAT.get(k, '📦')} {k}", "Monto ($)": v}
                         for k, v in sorted(cat_f.items(), key=lambda x: x[1], reverse=True)
                     ])
                     fig_cat = px.bar(
                         df_cat, x="Monto ($)", y="Categoría", orientation="h",
                         text_auto='.2f',
                         color="Monto ($)",
-                        color_continuous_scale=["#27AE60","#F39C12","#E74C3C"]
+                        color_continuous_scale=[COLOR_VERDE_CLARO, COLOR_ORO, COLOR_ROJO]
                     )
                     fig_cat.update_layout(
                         height=320, plot_bgcolor="white",
                         showlegend=False, coloraxis_showscale=False,
-                        yaxis={"categoryorder":"total ascending"}
+                        yaxis={"categoryorder": "total ascending"}
                     )
                     fig_cat.update_traces(textposition="outside")
                     st.plotly_chart(fig_cat, use_container_width=True)
                     cat_max = max(cat_f, key=cat_f.get)
-                    st.markdown(f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="tip-box">💡 Mayor gasto: <strong>{cat_max}</strong> (${cat_f[cat_max]:,.2f})</div>',
+                        unsafe_allow_html=True)
                 else:
                     st.info("Aún no hay gastos para mostrar.")
 
             with tab_linea:
-                saldo_acum = 0.0; puntos = []
+                saldo_acum = 0.0;
+                puntos = []
                 for fl, m in dias_ord:
                     saldo_acum += m["Ingresos"] - m["Egresos"]
-                    puntos.append({"Fecha":fl,"Saldo ($)":saldo_acum})
+                    puntos.append({"Fecha": fl, "Saldo ($)": saldo_acum})
                 fig3 = px.line(pd.DataFrame(puntos), x="Fecha", y="Saldo ($)", markers=True,
                                color_discrete_sequence=[COLOR_AZUL])
-                fig3.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.5)
+                fig3.add_hline(y=0, line_dash="dash", line_color=COLOR_ROJO, opacity=0.5)
                 fig3.update_layout(height=340, plot_bgcolor="white")
                 st.plotly_chart(fig3, use_container_width=True)
         else:
@@ -363,12 +538,12 @@ else:
 
         with tab_ing:
             with st.form("form_ingreso", clear_on_submit=True):
-                monto_ing  = st.number_input("Monto ($)", min_value=0.01, step=10.0)
+                monto_ing = st.number_input("Monto ($)", min_value=0.01, step=10.0)
                 fuente_ing = st.text_input("Fuente", placeholder="Beca ESPOL, Trabajo, Mesada…")
-                fecha_ing  = st.date_input("Fecha", value=date.today())
+                fecha_ing = st.date_input("Fecha", value=date.today())
                 factura_ing = st.file_uploader(
                     "📎 Adjuntar factura (opcional)",
-                    type=["jpg","jpeg","png","pdf"],
+                    type=["jpg", "jpeg", "png", "pdf"],
                     key="factura_ing"
                 )
                 if st.form_submit_button("💾 Guardar Ingreso", use_container_width=True):
@@ -378,6 +553,8 @@ else:
                         if factura_ing:
                             with st.spinner("Subiendo factura…"):
                                 url_factura = subir_factura(factura_ing, user_id, fuente_ing)
+                            if not url_factura:
+                                st.warning("⚠️ No se pudo subir la factura; el ingreso se guardará sin ella.")
 
                         exito, msg = guardar_movimiento(
                             user_id, "Ingreso",
@@ -403,12 +580,12 @@ else:
 
         with tab_gas:
             with st.form("form_gasto", clear_on_submit=True):
-                monto_gas  = st.number_input("Monto ($)", min_value=0.01, step=1.0)
-                texto_gas  = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
-                fecha_gas  = st.date_input("Fecha", value=date.today())
+                monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
+                texto_gas = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
+                fecha_gas = st.date_input("Fecha", value=date.today())
                 factura_gas = st.file_uploader(
                     "📎 Adjuntar factura (opcional)",
-                    type=["jpg","jpeg","png","pdf"],
+                    type=["jpg", "jpeg", "png", "pdf"],
                     key="factura_gas"
                 )
                 if st.form_submit_button("🤖 Clasificar con IA y Guardar", use_container_width=True):
@@ -420,6 +597,8 @@ else:
                         if factura_gas:
                             with st.spinner("Subiendo factura…"):
                                 url_factura = subir_factura(factura_gas, user_id, texto_gas)
+                            if not url_factura:
+                                st.warning("⚠️ No se pudo subir la factura; el gasto se guardará sin ella.")
 
                         exito, msg = guardar_movimiento(
                             user_id, "Gasto", texto_gas,
@@ -432,7 +611,7 @@ else:
                             st.session_state["gami_notif"] = res_gami
                             msg_ok = (
                                 f"✅ Gasto guardado · Categoría: **{cat_ia.upper()}** "
-                                f"{EMOJI_CAT.get(cat_ia.upper(),'📦')} · +{res_gami['xp_ganado']} XP ⭐"
+                                f"{EMOJI_CAT.get(cat_ia.upper(), '📦')} · +{res_gami['xp_ganado']} XP ⭐"
                             )
                             if url_factura:
                                 msg_ok += " · 📎 Factura guardada"
@@ -456,7 +635,7 @@ else:
             # Filtros en una fila
             col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
             with col_f1:
-                filtro_tipo = st.selectbox("Tipo", ["Todos","💵 Ingreso","🛒 Gasto"], key="filtro_tipo")
+                filtro_tipo = st.selectbox("Tipo", ["Todos", "💵 Ingreso", "🛒 Gasto"], key="filtro_tipo")
             with col_f2:
                 fecha_desde = st.date_input("Desde", value=None, key="fecha_desde")
             with col_f3:
@@ -473,11 +652,12 @@ else:
 
             st.caption(f"Mostrando {min(len(lista), 8)} de {len(lista)} transacciones")
 
+
             # Mostrar máximo 8 filas, el resto con expander
             def render_mov(mov):
-                es_ingreso  = mov["Tipo"] == "💵 Ingreso"
-                color_m     = COLOR_VERDE if es_ingreso else COLOR_ROJO
-                clase       = "ingreso" if es_ingreso else "gasto"
+                es_ingreso = mov["Tipo"] == "💵 Ingreso"
+                color_m = COLOR_VERDE if es_ingreso else COLOR_ROJO
+                clase = "ingreso" if es_ingreso else "gasto"
                 tiene_factura = bool(mov.get("_factura_url"))
                 icono_factura = " 📎" if tiene_factura else ""
 
@@ -519,6 +699,7 @@ else:
                                 unsafe_allow_html=True
                             )
 
+
             # Primeros 8 visibles
             for mov in lista[:8]:
                 render_mov(mov)
@@ -537,7 +718,8 @@ else:
     # ══════════════════════════════════════════
     elif opcion_menu == "🏆 Mi Progreso":
 
-        gami = obtener_estado(user_id)
+        # 'gami' ya se cargó arriba para el widget del sidebar — reutilizarlo
+        # evita una segunda consulta idéntica a la base de datos en cada carga.
         racha_emoji = "🔥" if gami["racha_viva"] else "💤"
 
         st.markdown(f"""
@@ -580,7 +762,8 @@ else:
         if not gami["racha_viva"] and gami["racha_actual"] == 0:
             st.info("💡 Registra un ingreso o gasto hoy para iniciar tu racha.")
         elif gami["racha_viva"]:
-            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>',
+                        unsafe_allow_html=True)
         else:
             st.warning("⚠️ Tu racha se rompió. ¡Registra un movimiento hoy para reiniciarla!")
 
@@ -638,8 +821,8 @@ else:
     # ══════════════════════════════════════════
     elif opcion_menu == "🐢 Asistente Polibank":
 
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#1B8A4C,#27AE60);
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,{COLOR_VERDE},{COLOR_VERDE_CLARO});
                     border-radius:16px;padding:20px 24px;color:white;margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:12px;">
             <span style="font-size:2.5rem;">🐢</span>
@@ -737,7 +920,7 @@ else:
           <div style="color:#ddd;font-size:0.82rem;">@polibank_ \u00b7 Tips de finanzas para universitarios</div>
         </div>
         """, unsafe_allow_html=True)
-        col_tik, _, _ = st.columns([1, 1, 1])
+        _, col_tik, _ = st.columns([1, 2, 1])
         with col_tik:
             st.link_button("\U0001f3b5 Ir al TikTok de Polibank",
                            "https://www.tiktok.com/@polibank_?lang=es-419",
