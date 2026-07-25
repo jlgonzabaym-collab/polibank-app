@@ -422,20 +422,21 @@ def _saludo_contextual(nombre: str) -> dict:
 
 
 # Restaurar sesión desde la cookie (si existe) antes de decidir qué mostrar
-# NOTA: justo después de un logout explícito NO intentamos restaurar todavía,
-# porque EncryptedCookieManager tarda un ciclo de renderizado extra en
-# sincronizar el borrado con el navegador. Sin este chequeo, cookies.get()
-# aquí sigue devolviendo el valor viejo y el usuario "vuelve a entrar" solo.
-if "usuario_conectado" not in st.session_state and not st.session_state.get("sesion_recien_cerrada"):
+# NOTA: justo después de un logout explícito NO restauramos todavía, porque
+# EncryptedCookieManager puede tardar más de un ciclo de renderizado en
+# sincronizar el borrado con el navegador (por ejemplo, si el usuario ya
+# interactúa con la pantalla de login/registro mientras tanto). Por eso la
+# bandera se mantiene activa hasta que confirmamos que la cookie quedó vacía,
+# en vez de apagarla después de un solo rerun.
+if "usuario_conectado" not in st.session_state:
     _cookie_id = cookies.get("usuario_id")
     _cookie_correo = cookies.get("usuario_correo")
-    if _cookie_id and _cookie_correo:
+    if st.session_state.get("sesion_recien_cerrada"):
+        if not _cookie_id and not _cookie_correo:
+            # El navegador ya confirmó el borrado: dejamos de bloquear.
+            st.session_state["sesion_recien_cerrada"] = False
+    elif _cookie_id and _cookie_correo:
         st.session_state["usuario_conectado"] = {"id": int(_cookie_id), "correo": _cookie_correo}
-
-# Una vez que ya pasamos por este chequeo una vez tras el logout, se puede
-# volver a intentar restaurar en futuros reruns (por ejemplo si el usuario
-# hace login de nuevo, ese bloque setea usuario_conectado directamente).
-st.session_state["sesion_recien_cerrada"] = False
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
@@ -1089,7 +1090,7 @@ else:
             st.caption(f"🏆 Tu récord personal: **{gami['racha_maxima']} días** seguidos")
 
         # Tabs: Logros | Ranking
-        tab_logros, tab_ranking = st.tabs(["🏅 Mis Logros", "🏆 Ranking Semanal"])
+        tab_ranking, tab_logros = st.tabs(["🏆 Ranking Semanal", "🏅 Mis Logros"])
 
         with tab_logros:
             st.subheader("⭐ ¿Cómo ganar XP?")
