@@ -297,17 +297,35 @@ _logo_tag = (
     if _logo_b64 else "🐢"
 )
 
-st.markdown(f"""
-<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-  {_logo_tag}
-  <h1 style="margin:0;font-size:1.6rem;font-family:'Sora',sans-serif;">Polibank · ESPOL</h1>
-</div>
-""", unsafe_allow_html=True)
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+            "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def _saludo_contextual(nombre: str) -> dict:
+    """El saludo y el ícono cambian según la hora; el fondo de la
+    tarjeta es siempre el mismo (verde oscuro de marca, animado)."""
+    hora = datetime.now().hour
+    if 5 <= hora < 12:
+        saludo, icono = f"¡Buenos días, {nombre}!", "☀️"
+    elif 12 <= hora < 19:
+        saludo, icono = f"¡Buenas tardes, {nombre}!", "🌤️"
+    else:
+        saludo, icono = f"¡Buenas noches, {nombre}!", "🌙"
+    return {"saludo": saludo, "icono": icono}
+
 
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
 # ═══════════════════════════════════════════════
 if "usuario_conectado" not in st.session_state:
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      {_logo_tag}
+      <h1 style="margin:0;font-size:1.6rem;font-family:'Sora',sans-serif;">Polibank · ESPOL</h1>
+    </div>
+    """, unsafe_allow_html=True)
+
     tab_login, tab_registro = st.tabs(["🔒 Iniciar Sesión", "📝 Crear Cuenta"])
 
     with tab_login:
@@ -347,16 +365,94 @@ if "usuario_conectado" not in st.session_state:
 else:
     user_id = st.session_state["usuario_conectado"]["id"]
     correo_user = st.session_state["usuario_conectado"]["correo"]
+    nombre_user = correo_user.split("@")[0].capitalize()
 
-    col_user, col_logout = st.columns([4, 1])
-    with col_user:
-        st.caption(f"👤 {correo_user}")
-    with col_logout:
-        if st.button("Salir ❌", use_container_width=True):
-            del st.session_state["usuario_conectado"]
-            st.rerun()
+    ahora = datetime.now()
+    ctx = _saludo_contextual(nombre_user)
+    subtitulo = f"{DIAS_ES[ahora.weekday()]} {ahora.day} de {MESES_ES[ahora.month - 1]} · {ahora.strftime('%I:%M %p').lstrip('0')}"
 
-    st.divider()
+    st.markdown(f"""
+    <style>
+    .st-key-saludo_dinamico {{
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(160deg, #0F5636 0%, #0A3D27 55%, #041712 100%) !important;
+      border-radius: 24px;
+      padding: 18px 16px 12px 16px;
+      margin-bottom: 16px;
+      border: none !important;
+      box-shadow: 0 10px 26px rgba(15,92,59,0.18);
+    }}
+    .st-key-saludo_dinamico [data-testid="stButton"] button {{
+      background: rgba(255,255,255,0.16) !important;
+      color: #FFFFFF !important;
+      box-shadow: none !important;
+      font-size: 0.76rem !important;
+      padding: 6px 4px !important;
+    }}
+
+    /* Paisaje animado: estrellas titilando + montañas con parallax lento */
+    .paisaje-anim {{ position: absolute !important; inset: 0 !important; pointer-events: none; overflow: hidden; z-index: 0; }}
+    .estrella {{
+      position: absolute !important; width: 4px !important; height: 4px !important; border-radius: 50% !important;
+      background: #FFFFFF !important; box-shadow: 0 0 6px 1px rgba(255,255,255,0.8);
+      animation: titilar 2.2s ease-in-out infinite !important;
+    }}
+    @keyframes titilar {{
+      0%, 100% {{ opacity: 0.1; }}
+      50%      {{ opacity: 1;   }}
+    }}
+    .monte {{
+      position: absolute !important; bottom: -10px; width: 140%; height: 70px;
+      background: {COLOR_VERDE_CLARO} !important; opacity: 0.45 !important;
+    }}
+    .monte-1 {{
+      left: -10%; clip-path: polygon(0% 100%, 0% 55%, 15% 35%, 30% 60%, 45% 25%, 60% 55%, 75% 40%, 90% 65%, 100% 45%, 100% 100%);
+      animation: deriva-izq 18s linear infinite alternate !important;
+    }}
+    .monte-2 {{
+      left: -20%; bottom: -16px; height: 52px; opacity: 0.65 !important;
+      clip-path: polygon(0% 100%, 0% 65%, 20% 40%, 35% 62%, 50% 30%, 65% 58%, 80% 38%, 100% 60%, 100% 100%);
+      animation: deriva-der 24s linear infinite alternate !important;
+    }}
+    @keyframes deriva-izq {{ from {{ transform: translateX(0); }} to {{ transform: translateX(-6%); }} }}
+    @keyframes deriva-der {{ from {{ transform: translateX(0); }} to {{ transform: translateX(6%); }} }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container(key="saludo_dinamico"):
+        st.markdown("""
+        <div class="paisaje-anim">
+          <span class="estrella" style="top:20%;left:12%;animation-delay:0s;"></span>
+          <span class="estrella" style="top:15%;left:30%;animation-delay:.6s;"></span>
+          <span class="estrella" style="top:28%;left:48%;animation-delay:1.2s;"></span>
+          <span class="estrella" style="top:18%;left:68%;animation-delay:.3s;"></span>
+          <span class="estrella" style="top:35%;left:85%;animation-delay:1.8s;"></span>
+          <span class="estrella" style="top:10%;left:78%;animation-delay:.9s;"></span>
+          <span class="estrella" style="top:40%;left:20%;animation-delay:2.1s;"></span>
+          <div class="monte monte-1"></div>
+          <div class="monte monte-2"></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;text-align:center;">
+          <div style="background:#FFFFFF;border-radius:100px;padding:10px;box-shadow:0 4px 14px rgba(0,0,0,0.14);margin-bottom:10px;">
+            {_logo_tag}
+          </div>
+          <div style="font-size:1.15rem;font-weight:800;color:#FFFFFF;font-family:'Sora',sans-serif;">
+            {ctx['saludo']} {ctx['icono']}
+          </div>
+          <div style="font-size:0.8rem;color:rgba(255,255,255,0.75);margin-top:2px;">{subtitulo}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        _, col_salir = st.columns([5, 1])
+        with col_salir:
+            if st.button("Salir ✕", key="btn_salir_hero", use_container_width=True):
+                del st.session_state["usuario_conectado"]
+                st.rerun()
+
 
     # Widget de racha — arriba del menú, siempre visible en el contenido principal
     gami = obtener_estado(user_id)
