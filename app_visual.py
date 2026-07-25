@@ -128,15 +128,31 @@ st.markdown(f"""
     min-height: 2.7rem;
   }}
 
-  /* Subidor de archivos — solo estilo visual, sin tocar el
-     comportamiento interactivo (eso fue lo que rompía el toque en móvil) */
+  /* Subidor de archivos */
   [data-testid="stFileUploaderDropzone"] {{
     background-color: #F1F4F1 !important;
     border-radius: 14px !important;
     border: 1.5px dashed #C7D2C9 !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1;
   }}
-  [data-testid="stFileUploaderDropzone"] * {{ color: {COLOR_TINTA} !important; }}
+  [data-testid="stFileUploaderDropzone"] * {{
+    color: {COLOR_TINTA} !important;
+    pointer-events: auto !important;
+  }}
   [data-testid="stFileUploaderDropzoneInstructions"] svg {{ fill: {COLOR_TINTA} !important; }}
+  [data-testid="stFileUploaderDropzone"] input[type="file"] {{
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }}
+  [data-testid="stBaseButton-secondary"] {{
+    pointer-events: auto !important;
+  }}
 
   /* Botones — varios selectores porque el testid cambió de nombre entre versiones */
   .stButton>button, [data-testid^="stBaseButton"], [data-testid="stFormSubmitButton"]>button {{
@@ -245,41 +261,52 @@ st.markdown(f"""
     margin-bottom: 10px;
   }}
 
-  /* Menú principal horizontal (antes en el sidebar) — st.pills en grilla 2x2 */
-  [data-testid="stPills"] > div {{
+  /* Menú principal horizontal (antes en el sidebar) — estilo de pastillas */
+  div[role="radiogroup"] {{
     display: grid !important;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }}
-  [data-testid="stPills"] button {{
-    background: #FFFFFF !important;
-    border: 1px solid #E7ECE8 !important;
-    border-radius: 100px !important;
-    padding: 10px !important;
-    font-weight: 600 !important;
-    font-size: 0.82rem !important;
+  div[role="radiogroup"] label {{
+    background: #FFFFFF;
+    border: 1px solid #E7ECE8;
+    border-radius: 100px;
+    padding: 10px 10px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    line-height: 1.1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
-    box-shadow: none !important;
+    box-sizing: border-box;
     transition: all 0.15s ease;
   }}
-  [data-testid="stPills"] button p {{
+  div[role="radiogroup"] label p {{
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     margin: 0;
-    color: {COLOR_TINTA};
   }}
-  [data-testid="stPills"] button[aria-pressed="true"],
-  [data-testid="stPills"] button[kind="pillsActive"] {{
-    background: {COLOR_VERDE} !important;
-    border-color: {COLOR_VERDE} !important;
+  div[role="radiogroup"] label:has(input:checked) {{
+    background: {COLOR_VERDE};
+    border-color: {COLOR_VERDE};
   }}
-  [data-testid="stPills"] button[aria-pressed="true"] p,
-  [data-testid="stPills"] button[kind="pillsActive"] p {{
+  div[role="radiogroup"] label:has(input:checked) p {{
     color: #FFFFFF !important;
+  }}
+  div[role="radiogroup"] input {{ display: none; }}
+  /* Oculta el círculo del radio — varios selectores porque la estructura
+     interna de BaseWeb varía entre versiones de Streamlit */
+  div[role="radiogroup"] label > div:first-child,
+  div[role="radiogroup"] label svg,
+  div[role="radiogroup"] [data-baseweb="radio"] > div:first-child {{
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }}
 
   /* Botón de eliminar en el historial: ícono compacto, no la píldora
@@ -545,17 +572,12 @@ else:
     # Menú principal — como pestañas horizontales en el contenido principal,
     # en vez de en el sidebar. Así el menú siempre está a la vista, sin
     # depender de un botón para abrir/cerrar un panel lateral.
-    # st.pills en vez de st.radio: es un widget nativo de "pastillas"
-    # sin el círculo de radio que había que ocultar con CSS.
-    opciones_menu = ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"]
-    opcion_menu = st.pills(
-        "Menú Polibank",
-        opciones_menu,
-        default=opciones_menu[0],
+    opcion_menu = st.radio(
+        "📱 Menú Polibank",
+        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"],
+        horizontal=True,
         label_visibility="collapsed",
     )
-    if opcion_menu is None:
-        opcion_menu = opciones_menu[0]
     st.divider()
 
     # Notificación de badges nuevos
@@ -612,7 +634,7 @@ else:
         balance = total_ingresos - total_egresos
 
         # ── MÉTRICAS
-        st.subheader("📊 Resumen de tu Cuenta")
+        st.subheader("Resumen de tu Cuenta")
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(
@@ -665,7 +687,6 @@ else:
                     marker_line_width=0,
                     selector=dict(type="bar")
                 )
-                n_cats = len(dias_ord)
                 fig.update_layout(
                     height=320,
                     plot_bgcolor="white", paper_bgcolor="white",
@@ -678,8 +699,7 @@ else:
                         title_text=""
                     ),
                     xaxis=dict(showgrid=False, linecolor="#E7ECE8",
-                               tickfont=dict(size=10, color="#7A8A80"), title="",
-                               range=[-0.6, n_cats - 0.4]),
+                               tickfont=dict(size=10, color="#7A8A80"), title=""),
                     yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
                                linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
                                tickprefix="$", title="", fixedrange=True),
@@ -759,8 +779,7 @@ else:
                     font=dict(family="Inter, sans-serif", color="#12241C", size=11),
                     margin=dict(l=8, r=8, t=8, b=8),
                     xaxis=dict(showgrid=False, linecolor="#E7ECE8",
-                               tickfont=dict(size=10, color="#7A8A80"), title="",
-                               range=[-0.6, len(puntos) - 0.4]),
+                               tickfont=dict(size=10, color="#7A8A80"), title=""),
                     yaxis=dict(showgrid=True, gridcolor="#F0F4F1",
                                linecolor="#E7ECE8", tickfont=dict(size=10, color="#7A8A80"),
                                tickprefix="$", title="", fixedrange=True),
@@ -779,7 +798,7 @@ else:
         # ══════════════════════════════════════════
         # REGISTRAR MOVIMIENTOS (ahora arriba del historial)
         # ══════════════════════════════════════════
-        st.subheader("➕ Registrar Movimiento")
+        st.subheader("Registrar Movimiento")
         tab_ing, tab_gas = st.tabs(["💵 Ingreso", "🛒 Gasto con IA"])
 
         with tab_ing:
