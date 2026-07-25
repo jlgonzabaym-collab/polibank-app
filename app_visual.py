@@ -4,7 +4,8 @@ from pathlib import Path
 from app.database import (
     registrar_usuario, login_usuario,
     guardar_movimiento, obtener_movimientos,
-    obtener_videos_educativos, eliminar_movimiento
+    obtener_videos_educativos, eliminar_movimiento,
+    obtener_gastos_recurrentes, agregar_gasto_recurrente, eliminar_gasto_recurrente
 )
 from app.gamificacion import registrar_accion, obtener_estado, BADGES
 from datetime import datetime, date
@@ -16,11 +17,21 @@ from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 import uuid
 from academia_ui import render_academia
+from streamlit_cookies_manager import EncryptedCookieManager
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Polibank", page_icon="🐢", layout="centered")
+
+# ── Sesión persistente: guarda el login en una cookie cifrada del
+# navegador para que no haya que volver a loguearse en cada visita.
+cookies = EncryptedCookieManager(
+    prefix="polibank_",
+    password="polibank_cookie_secret_2026",  # cambia esto por algo propio si quieres
+)
+if not cookies.ready():
+    st.stop()
 
 COLOR_VERDE = "#0F5C3B"        # Verde oscuro del logo (faceta izquierda)
 COLOR_VERDE_CLARO = "#2FAE60"  # Verde brillante del logo (faceta derecha) — ingresos
@@ -106,14 +117,42 @@ st.markdown(f"""
   }}
   [data-baseweb="menu"] li {{ color: {COLOR_TINTA} !important; }}
 
+  /* Botón "+" de gastos recurrentes: mismo estilo que el stepper de monto */
+  [data-testid="stPopover"] > div > button {{
+    background-color: #F1F4F1 !important;
+    color: {COLOR_TINTA} !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    min-height: 2.7rem;
+  }}
+
   /* Subidor de archivos */
   [data-testid="stFileUploaderDropzone"] {{
     background-color: #F1F4F1 !important;
     border-radius: 14px !important;
     border: 1.5px dashed #C7D2C9 !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1;
   }}
-  [data-testid="stFileUploaderDropzone"] * {{ color: {COLOR_TINTA} !important; }}
+  [data-testid="stFileUploaderDropzone"] * {{
+    color: {COLOR_TINTA} !important;
+    pointer-events: auto !important;
+  }}
   [data-testid="stFileUploaderDropzoneInstructions"] svg {{ fill: {COLOR_TINTA} !important; }}
+  [data-testid="stFileUploaderDropzone"] input[type="file"] {{
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }}
+  [data-testid="stBaseButton-secondary"] {{
+    pointer-events: auto !important;
+  }}
 
   /* Botones — varios selectores porque el testid cambió de nombre entre versiones */
   .stButton>button, [data-testid^="stBaseButton"], [data-testid="stFormSubmitButton"]>button {{
@@ -133,8 +172,9 @@ st.markdown(f"""
 
   /* Pestañas (Tabs) más sutiles y elegantes */
   .stTabs [data-baseweb="tab-list"] {{ gap: 20px; border-bottom: 1px solid #E7ECE8; }}
-  .stTabs [data-baseweb="tab"] {{ padding: 10px 2px; background: transparent; font-weight: 600; color: #6B7A70; }}
-  .stTabs [aria-selected="true"] {{ color: {COLOR_VERDE} !important; }}
+  .stTabs [data-baseweb="tab"] {{ padding: 10px 2px; background: transparent; font-weight: 600; }}
+  .stTabs [data-baseweb="tab"] p {{ color: #6B7A70 !important; }}
+  .stTabs [aria-selected="true"] p {{ color: {COLOR_VERDE} !important; }}
 
   /* Filas del historial de movimientos */
   .mov-row {{ padding: 14px 16px; margin-bottom: 10px; display: flex; flex-direction: column; }}
@@ -259,7 +299,29 @@ st.markdown(f"""
     color: #FFFFFF !important;
   }}
   div[role="radiogroup"] input {{ display: none; }}
-  div[role="radiogroup"] > label > div:first-child {{ display: none; }} /* oculta el círculo del radio */
+  /* Oculta el círculo del radio — varios selectores porque la estructura
+     interna de BaseWeb varía entre versiones de Streamlit */
+  div[role="radiogroup"] label > div:first-child,
+  div[role="radiogroup"] label svg,
+  div[role="radiogroup"] [data-baseweb="radio"] > div:first-child {{
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }}
+
+  /* Botón de eliminar en el historial: ícono compacto, no la píldora
+     grande por defecto — se aplica a cualquier fila (delbtn_<id>) */
+  [class*="st-key-delbtn_"] [data-testid="stButton"] button {{
+    background: #FCEDEB !important;
+    color: {COLOR_ROJO} !important;
+    border-radius: 50% !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    font-size: 0.85rem !important;
+  }}
 
   .sidebar-gami {{ padding: 14px 18px; }}
 </style>
@@ -358,6 +420,13 @@ def _saludo_contextual(nombre: str) -> dict:
         }
 
 
+# Restaurar sesión desde la cookie (si existe) antes de decidir qué mostrar
+if "usuario_conectado" not in st.session_state:
+    _cookie_id = cookies.get("usuario_id")
+    _cookie_correo = cookies.get("usuario_correo")
+    if _cookie_id and _cookie_correo:
+        st.session_state["usuario_conectado"] = {"id": int(_cookie_id), "correo": _cookie_correo}
+
 # ═══════════════════════════════════════════════
 # BLOQUE A: LOGIN / REGISTRO
 # ═══════════════════════════════════════════════
@@ -380,6 +449,9 @@ if "usuario_conectado" not in st.session_state:
                 exito, resultado = login_usuario(correo_login, pass_login)
                 if exito:
                     st.session_state["usuario_conectado"] = resultado
+                    cookies["usuario_id"] = str(resultado["id"])
+                    cookies["usuario_correo"] = resultado["correo"]
+                    cookies.save()
                     registrar_accion(resultado["id"], "login")
                     st.rerun()
                 else:
@@ -476,6 +548,11 @@ else:
         with col_salir:
             if st.button("Salir ✕", key="btn_salir_hero", use_container_width=True):
                 del st.session_state["usuario_conectado"]
+                if "usuario_id" in cookies:
+                    del cookies["usuario_id"]
+                if "usuario_correo" in cookies:
+                    del cookies["usuario_correo"]
+                cookies.save()
                 st.rerun()
 
 
@@ -618,7 +695,7 @@ else:
                     legend=dict(
                         orientation="h", yanchor="bottom", y=1.02,
                         xanchor="right", x=1,
-                        font=dict(size=11), bgcolor="rgba(0,0,0,0)",
+                        font=dict(size=11, color="#12241C"), bgcolor="rgba(0,0,0,0)",
                         title_text=""
                     ),
                     xaxis=dict(showgrid=False, linecolor="#E7ECE8",
@@ -628,7 +705,7 @@ else:
                                tickprefix="$", title="", fixedrange=True),
                     xaxis_fixedrange=False,
                     dragmode="pan",
-                    bargap=0.25, bargroupgap=0.1,
+                    bargap=0.12, bargroupgap=0.04,
                     modebar_remove=["zoom","pan","select","lasso2d","zoomIn2d",
                                     "zoomOut2d","autoScale2d","resetScale2d",
                                     "toImage","sendDataToCloud"],
@@ -767,9 +844,47 @@ else:
                         st.warning("El monto debe ser mayor a $0.")
 
         with tab_gas:
+            col_lbl, col_add = st.columns([5, 1])
+            with col_lbl:
+                st.markdown(
+                    '<div style="font-size:0.82rem;font-weight:600;color:#31333F;margin-top:8px;">¿En qué gastaste?</div>',
+                    unsafe_allow_html=True
+                )
+            with col_add:
+                with st.popover("➕"):
+                    st.markdown("**Gastos recurrentes**")
+                    recurrentes = obtener_gastos_recurrentes(user_id)
+                    if recurrentes:
+                        for r in recurrentes:
+                            c1, c2 = st.columns([4, 1])
+                            with c1:
+                                if st.button(r["nombre"], key=f"rec_{r['id']}", use_container_width=True):
+                                    st.session_state["texto_gas_prefill"] = r["nombre"]
+                                    st.rerun()
+                            with c2:
+                                if st.button("🗑️", key=f"delrec_{r['id']}"):
+                                    eliminar_gasto_recurrente(r["id"])
+                                    st.rerun()
+                    else:
+                        st.caption("Aún no tienes gastos recurrentes guardados.")
+                    st.divider()
+                    nuevo_rec = st.text_input(
+                        "Agregar nuevo", key="nuevo_recurrente_input",
+                        placeholder="Ej: Almuerzo", label_visibility="collapsed"
+                    )
+                    if st.button("➕ Agregar a la lista", key="btn_add_recurrente", use_container_width=True):
+                        if nuevo_rec.strip():
+                            agregar_gasto_recurrente(user_id, nuevo_rec.strip())
+                            st.rerun()
+
             with st.form("form_gasto", clear_on_submit=True):
                 monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
-                texto_gas = st.text_input("¿En qué gastaste?", placeholder="Almuerzo comedor FCSH, bus Guayaquil…")
+                texto_gas = st.text_input(
+                    "¿En qué gastaste?",
+                    value=st.session_state.pop("texto_gas_prefill", ""),
+                    placeholder="Almuerzo comedor FCSH, bus Guayaquil…",
+                    label_visibility="collapsed"
+                )
                 fecha_gas = st.date_input("Fecha", value=date.today())
                 factura_gas = st.file_uploader(
                     "📎 Adjuntar factura (opcional)",
@@ -863,10 +978,11 @@ else:
                     )
                 with col_del:
                     st.write("")
-                    if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
-                        ok, _ = eliminar_movimiento(mov["_id"])
-                        if ok:
-                            st.rerun()
+                    with st.container(key=f"delbtn_{mov['_id']}"):
+                        if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
+                            ok, _ = eliminar_movimiento(mov["_id"])
+                            if ok:
+                                st.rerun()
 
                 # Panel de factura expandible debajo de la fila
                 if tiene_factura:
