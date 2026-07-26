@@ -1167,7 +1167,7 @@ else:
         if not gami["racha_viva"] and gami["racha_actual"] == 0:
             st.info("💡 Registra un ingreso o gasto hoy para iniciar tu racha.")
         elif gami["racha_viva"]:
-            st.markdown('<div class="tip-box">🔥 ¡Tu racha sigue viva! Vuelve mañana para seguir sumando días.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="tip-box">🌱 ¡Sigue sumando días y tu árbol seguirá creciendo! Vuelve mañana para no perder la racha.</div>', unsafe_allow_html=True)
         else:
             st.warning("⚠️ Tu racha se rompió. ¡Registra un movimiento hoy para reiniciarla!")
 
