@@ -1096,7 +1096,7 @@ else:
 
                     if tiene_factura:
                         url = mov["_factura_url"]
-                        with st.expander("📎 Ver factura adjunta"):
+                        with st.expander("Ver factura adjunta"):
                             if url.lower().endswith(".pdf"):
                                 st.markdown(
                                     f'<a href="{url}" target="_blank" style="font-weight:600;color:{COLOR_VERDE};">'
