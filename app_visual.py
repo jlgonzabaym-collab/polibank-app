@@ -73,7 +73,7 @@ st.markdown(f"""
   .block-container {{ padding: 1.25rem 1rem 3rem 1rem !important; max-width: 100%; }}
 
   /* Tarjetas: sin bordes agresivos, redondeadas y sombras súper suaves */
-  .metric-card, .mov-row, .progreso-card, .badge-card, .sidebar-gami {{
+  .metric-card, .progreso-card, .badge-card, .sidebar-gami, [class*="st-key-movcard_"] {{
     background: #FFFFFF;
     border-radius: 20px;
     border: 1px solid #EDF1EE !important;
@@ -178,8 +178,9 @@ st.markdown(f"""
   .stTabs [aria-selected="true"] p {{ color: {COLOR_VERDE} !important; }}
 
   /* Filas del historial de movimientos */
-  .mov-row {{ padding: 14px 16px; margin-bottom: 10px; display: flex; flex-direction: column; }}
-  .mov-detalle {{ font-size: 0.92rem; color: {COLOR_TINTA}; font-weight: 600; margin-top: 6px; }}
+  [class*="st-key-movcard_"] {{ padding: 14px 16px !important; margin-bottom: 10px; }}
+  [class*="st-key-movcard_"] [data-testid="stVerticalBlockBorderWrapper"] {{ padding: 0 !important; }}
+  .mov-detalle {{ font-size: 0.92rem; color: {COLOR_TINTA}; font-weight: 600; }}
   .mov-monto {{ font-size: 1.1rem; font-weight: 800; }}
 
   /* Etiquetas de categorías pulidas (píldoras de colores pastel) */
@@ -1069,44 +1070,45 @@ else:
             def render_mov(mov):
                 es_ingreso = mov["Tipo"] == "💵 Ingreso"
                 color_m = COLOR_VERDE if es_ingreso else COLOR_ROJO
-                clase = "ingreso" if es_ingreso else "gasto"
                 tiene_factura = bool(mov.get("_factura_url"))
                 icono_factura = " 📎" if tiene_factura else ""
 
-                col_info, col_del = st.columns([11, 1])
-                with col_info:
-                    st.markdown(
-                        f'<div class="mov-row {clase}">'
-                        f'<span style="font-size:0.78rem;color:#999;">{mov["Fecha"]}</span> '
-                        f'{badge_cat(mov["Categoría"])} '
-                        f'<span class="mov-detalle">{mov["Detalle"]}{icono_factura}</span>'
-                        f'<span class="mov-monto" style="color:{color_m};float:right;">{mov["Monto ($)"]}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                with col_del:
-                    st.write("")
-                    with st.container(key=f"delbtn_{mov['_id']}"):
-                        if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
-                            ok, _ = eliminar_movimiento(mov["_id"])
-                            if ok:
-                                st.rerun()
+                with st.container(key=f"movcard_{mov['_id']}"):
+                    col_info, col_del = st.columns([11, 1], vertical_alignment="center")
+                    with col_info:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+                            f'<span style="font-size:0.78rem;color:#999;">{mov["Fecha"]}</span>'
+                            f'{badge_cat(mov["Categoría"])}'
+                            f'</div>'
+                            f'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;">'
+                            f'<span class="mov-detalle" style="margin-top:0;">{mov["Detalle"]}{icono_factura}</span>'
+                            f'<span class="mov-monto" style="color:{color_m};white-space:nowrap;">{mov["Monto ($)"]}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                    with col_del:
+                        with st.container(key=f"delbtn_{mov['_id']}"):
+                            if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
+                                ok, _ = eliminar_movimiento(mov["_id"])
+                                if ok:
+                                    st.rerun()
 
-                if tiene_factura:
-                    url = mov["_factura_url"]
-                    with st.expander("📎 Ver factura adjunta"):
-                        if url.lower().endswith(".pdf"):
-                            st.markdown(
-                                f'<a href="{url}" target="_blank" style="font-weight:600;color:{COLOR_VERDE};">'
-                                f'📄 Abrir PDF en nueva pestaña</a>',
-                                unsafe_allow_html=True
-                            )
-                        else:
-                            st.image(url, use_container_width=True)
-                            st.markdown(
-                                f'<a href="{url}" target="_blank" style="font-size:0.8rem;color:#888;">Ver en tamaño completo ↗</a>',
-                                unsafe_allow_html=True
-                            )
+                    if tiene_factura:
+                        url = mov["_factura_url"]
+                        with st.expander("📎 Ver factura adjunta"):
+                            if url.lower().endswith(".pdf"):
+                                st.markdown(
+                                    f'<a href="{url}" target="_blank" style="font-weight:600;color:{COLOR_VERDE};">'
+                                    f'📄 Abrir PDF en nueva pestaña</a>',
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                st.image(url, use_container_width=True)
+                                st.markdown(
+                                    f'<a href="{url}" target="_blank" style="font-size:0.8rem;color:#888;">Ver en tamaño completo ↗</a>',
+                                    unsafe_allow_html=True
+                                )
 
 
             for mov in lista[:8]:
