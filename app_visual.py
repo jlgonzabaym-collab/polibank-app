@@ -56,7 +56,7 @@ st.markdown(f"""
   footer {{visibility: hidden;}}
 
   html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; color: {COLOR_TINTA}; }}
-  h1, h2, h3, .metric-value, .gami-stat-val {{ font-family: 'Sora', sans-serif; }}
+  h1, h2, h3, .metric-value, .progreso-stat-val {{ font-family: 'Sora', sans-serif; }}
 
   /* Blindaje contra el modo oscuro del navegador: sin esto, Streamlit
      puede pintar títulos y texto en blanco sobre nuestro fondo claro. */
@@ -73,7 +73,7 @@ st.markdown(f"""
   .block-container {{ padding: 1.25rem 1rem 3rem 1rem !important; max-width: 100%; }}
 
   /* Tarjetas: sin bordes agresivos, redondeadas y sombras súper suaves */
-  .metric-card, .mov-row, .gami-stat, .badge-card, .sidebar-gami {{
+  .metric-card, .mov-row, .progreso-card, .badge-card, .sidebar-gami {{
     background: #FFFFFF;
     border-radius: 20px;
     border: 1px solid #EDF1EE !important;
@@ -205,10 +205,42 @@ st.markdown(f"""
     box-shadow: 0 12px 28px rgba(15,92,59,0.22);
     border-top: 3px solid {COLOR_MENTA};
   }}
-  .gami-stat-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }}
-  .gami-stat {{ background: transparent; box-shadow: none !important; border: 1px solid #E7ECE8 !important; padding: 14px 8px; text-align: center; }}
-  .gami-stat-val {{ font-size: 1.7rem; font-weight: 800; line-height: 1.1; }}
-  .gami-stat-lbl {{ font-size: 0.62rem; color: #8B988F; font-weight: 700; text-transform: uppercase; margin-top: 6px; letter-spacing: 0.4px; }}
+  /* Tarjeta única de progreso: escena de racha arriba + stats abajo,
+     reemplaza las 3 tarjetas separadas (la del medio quedaba vacía/fea). */
+  .progreso-card {{
+    background: #FFFFFF;
+    border-radius: 20px;
+    border: 1px solid #EDF1EE !important;
+    box-shadow: 0 6px 20px rgba(20,40,30,0.04) !important;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }}
+  .progreso-escena {{ position: relative; overflow: hidden; aspect-ratio: 340 / 150; }}
+  .racha-arbol-bg {{ position: absolute; inset: 0; }}
+  .racha-arbol-bg svg {{ width: 100%; height: 100%; display: block; }}
+  .racha-arbol-dormant {{ filter: grayscale(80%) brightness(0.94); }}
+  .racha-arbol-anim {{ transform-origin: 66px 92px; animation: racha-sway 6s ease-in-out infinite alternate; }}
+  @keyframes racha-sway {{ 0% {{ transform: rotate(-1.3deg); }} 100% {{ transform: rotate(1.3deg); }} }}
+  .racha-badge {{
+    position: absolute; top: 10px; right: 12px; z-index: 2;
+    font-size: 1.9rem; font-weight: 800; line-height: 1.1; color: {COLOR_ROJO};
+    text-shadow: 0 1px 4px rgba(255,255,255,0.6), 0 1px 8px rgba(255,255,255,0.4);
+  }}
+  .racha-caption {{
+    position: absolute; bottom: 10px; left: 14px; z-index: 2;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    color: #FFFFFF; text-shadow: 0 1px 3px rgba(10,30,20,0.35);
+  }}
+  .progreso-stats-row {{
+    display: flex;
+    align-items: center;
+    padding: 16px 8px;
+    border-top: 1px solid #EDF1EE;
+  }}
+  .progreso-stat {{ flex: 1; text-align: center; }}
+  .progreso-stat-val {{ font-size: 1.6rem; font-weight: 800; line-height: 1.1; font-family: 'Sora', sans-serif; }}
+  .progreso-stat-lbl {{ font-size: 0.62rem; color: #8B988F; font-weight: 700; text-transform: uppercase; margin-top: 6px; letter-spacing: 0.4px; }}
+  .progreso-divider {{ width: 1px; align-self: stretch; background: #E7ECE8; margin: 2px 0; }}
 
   /* Píldora de nivel — antes sin padding/tipografía, quedaba invisible */
   .nivel-pill {{
@@ -421,26 +453,116 @@ def _saludo_contextual(nombre: str) -> dict:
         }
 
 
-# Restaurar sesión desde la cookie (si existe) antes de decidir qué mostrar
-# NOTA: justo después de un logout explícito NO restauramos todavía, porque
-# EncryptedCookieManager puede tardar más de un ciclo de renderizado en
-# sincronizar el borrado con el navegador (por ejemplo, si el usuario ya
-# interactúa con la pantalla de login/registro mientras tanto). Por eso la
-# bandera se mantiene activa hasta que confirmamos que la cookie quedó vacía,
-# en vez de apagarla después de un solo rerun.
+def _svg_escena_racha(dias: int, viva: bool) -> str:
+    """Mini-paisaje con un árbol que crece con la racha.
+
+    - 0 días: solo tierra con una semilla recién plantada.
+    - Crecimiento continuo (sin saltos bruscos) hasta ~30 días, con
+      tronco, copa en capas (más volumen) y ramas.
+    - Día 21+: brotes dorados en la copa, como premio visual.
+    - Racha rota (viva=False): escena en tonos apagados y sin balanceo,
+      para transmitir "está dormida, revívela".
+    - El número de racha va como insignia flotante aparte (ver
+      render_leaderboard / Mi Progreso), no dentro del dibujo.
+    """
+    COLOR_MARRON = "#8B5E34"
+    g = min(dias / 30, 1.0)  # factor de crecimiento 0..1
+    cx, base_y = 66, 92
+    semilla = dias == 0
+
+    defs = (
+        '<defs>'
+        '<linearGradient id="cieloRachaGrad" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#EAFBF1" /><stop offset="100%" stop-color="#CFEEDD" /></linearGradient>'
+        '<radialGradient id="solRachaGrad" cx="50%" cy="50%" r="50%">'
+        '<stop offset="0%" stop-color="#FFEFAF" stop-opacity="0.85" /><stop offset="100%" stop-color="#FFEFAF" stop-opacity="0" /></radialGradient>'
+        '</defs>'
+    )
+    cielo = '<rect x="0" y="0" width="160" height="110" fill="url(#cieloRachaGrad)" />'
+    sol = '<circle cx="20" cy="22" r="28" fill="url(#solRachaGrad)" />'
+    colina_fondo = f'<path d="M0,80 Q40,64 80,76 T160,72 L160,110 L0,110 Z" fill="{COLOR_VERDE_CLARO}" fill-opacity="0.32" />'
+    suelo = f'<path d="M0,88 Q40,74 80,86 T160,82 L160,110 L0,110 Z" fill="{COLOR_VERDE}" fill-opacity="0.55" />'
+
+    if semilla:
+        planta = (
+            f'<ellipse cx="{cx}" cy="{base_y-2}" rx="14" ry="4" fill="{COLOR_VERDE}" fill-opacity="0.3" />'
+            f'<circle cx="{cx}" cy="{base_y-4}" r="3.4" fill="{COLOR_VERDE_CLARO}" />'
+        )
+    else:
+        alto = 16 + 50 * g
+        top_y = base_y - alto
+        bw = 5 + 5 * g   # ancho del tronco en la base
+        tw = 2 + 2 * g   # ancho del tronco arriba (afinado)
+        tronco = (
+            f'<path d="M {cx-bw/2:.1f} {base_y} L {cx-tw/2:.1f} {top_y:.1f} '
+            f'L {cx+tw/2:.1f} {top_y:.1f} L {cx+bw/2:.1f} {base_y} Z" fill="{COLOR_MARRON}" />'
+        )
+        sombra = f'<ellipse cx="{cx}" cy="{base_y+3}" rx="{bw*1.5:.1f}" ry="2.6" fill="#0A2419" fill-opacity="0.12" />'
+
+        ramas = ""
+        if g > 0.3:
+            fr = min((g - 0.3) / 0.7, 1.0)
+            lr = 7 + 8 * fr
+            y_rama = top_y + alto * 0.3
+            ramas = (
+                f'<path d="M {cx:.1f} {y_rama:.1f} q -{lr:.1f} -3 -{lr*1.2:.1f} -{lr*0.4:.1f}" fill="none" '
+                f'stroke="{COLOR_MARRON}" stroke-width="{1.6+1.4*fr:.1f}" stroke-linecap="round" />'
+                f'<path d="M {cx:.1f} {(y_rama-5):.1f} q {lr:.1f} -3 {lr*1.2:.1f} -{lr*0.4:.1f}" fill="none" '
+                f'stroke="{COLOR_MARRON}" stroke-width="{1.6+1.4*fr:.1f}" stroke-linecap="round" />'
+            )
+
+        # Copa en capas: fondo más oscuro para dar cuerpo + luces más
+        # claras arriba a la izquierda, simulando volumen con el sol.
+        copa = ""
+        if g > 0.04:
+            r = 9 + 7 * g
+            for dx, dy in [(-r*0.55, r*0.12), (r*0.55, r*0.12), (0, -r*0.4)]:
+                copa += (
+                    f'<ellipse cx="{cx+dx:.1f}" cy="{top_y+dy:.1f}" rx="{r*0.85:.1f}" ry="{r*0.72:.1f}" '
+                    f'fill="{COLOR_VERDE}" />'
+                )
+            for dx, dy in [(-r*0.32, -r*0.28), (r*0.18, -r*0.42)]:
+                copa += (
+                    f'<ellipse cx="{cx+dx:.1f}" cy="{top_y+dy:.1f}" rx="{r*0.48:.1f}" ry="{r*0.4:.1f}" '
+                    f'fill="{COLOR_VERDE_CLARO}" fill-opacity="0.85" />'
+                )
+
+        pasto = (
+            f'<path d="M {cx-bw*1.8:.1f} {base_y} q 2 -6 4 0" fill="none" stroke="{COLOR_VERDE}" '
+            f'stroke-width="1.6" stroke-linecap="round" />'
+            f'<path d="M {cx+bw*1.6:.1f} {base_y} q -2 -7 3 -1" fill="none" stroke="{COLOR_VERDE}" '
+            f'stroke-width="1.6" stroke-linecap="round" />'
+        )
+
+        flores = ""
+        if dias >= 21:
+            r = 9 + 7 * g
+            for dx, dy in [(-r*0.4, -r*0.5), (r*0.35, -r*0.15), (-r*0.1, r*0.05)]:
+                flores += f'<circle cx="{cx+dx:.1f}" cy="{top_y+dy:.1f}" r="1.7" fill="{COLOR_ORO}" />'
+
+        planta = sombra + tronco + ramas + copa + flores + pasto
+
+    clase_anim = "racha-arbol-anim" if (viva and not semilla) else ""
+    clase_dormido = "" if viva else "racha-arbol-dormant"
+
+    escena_svg = (
+        '<svg viewBox="0 0 160 110" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">'
+        f'{defs}{cielo}{sol}{colina_fondo}{suelo}<g class="{clase_anim}">{planta}</g></svg>'
+    )
+    badge = f'<div class="racha-badge">🔥 {dias}</div>'
+    caption = '<div class="racha-caption">Racha Actual</div>'
+    return f'<div class="racha-arbol-bg {clase_dormido}">{escena_svg}</div>{badge}{caption}'
+
+
 if "usuario_conectado" not in st.session_state:
     _cookie_id = cookies.get("usuario_id")
     _cookie_correo = cookies.get("usuario_correo")
     if st.session_state.get("sesion_recien_cerrada"):
         if not _cookie_id and not _cookie_correo:
-            # El navegador ya confirmó el borrado: dejamos de bloquear.
             st.session_state["sesion_recien_cerrada"] = False
     elif _cookie_id and _cookie_correo:
         st.session_state["usuario_conectado"] = {"id": int(_cookie_id), "correo": _cookie_correo}
 
-# ═══════════════════════════════════════════════
-# BLOQUE A: LOGIN / REGISTRO
-# ═══════════════════════════════════════════════
 if "usuario_conectado" not in st.session_state:
     st.markdown(f"""
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
@@ -485,9 +607,6 @@ if "usuario_conectado" not in st.session_state:
                 st.warning("Completa todos los campos.")
 
 
-# ═══════════════════════════════════════════════
-# BLOQUE B: APP PRINCIPAL
-# ═══════════════════════════════════════════════
 else:
     user_id = st.session_state["usuario_conectado"]["id"]
     correo_user = st.session_state["usuario_conectado"]["correo"]
@@ -517,9 +636,6 @@ else:
       padding: 6px 4px !important;
     }}
 
-    /* Paisaje: sol/luna+estrellas como fondo (::before) y montañas como
-       pseudo-elemento (::after) — así no dependen de HTML nuevo vía
-       markdown, van pegados directo a la tarjeta que ya sabemos que renderiza. */
     .st-key-saludo_dinamico::before {{
       content: "";
       position: absolute; inset: 0;
@@ -564,13 +680,10 @@ else:
                 if "usuario_correo" in cookies:
                     del cookies["usuario_correo"]
                 cookies.save()
-                # Evita que el próximo rerun restaure la sesión leyendo la
-                # cookie vieja (el borrado aún no se sincronizó al navegador).
                 st.session_state["sesion_recien_cerrada"] = True
                 st.rerun()
 
 
-    # Widget de racha — arriba del menú, siempre visible en el contenido principal
     gami = obtener_estado(user_id)
     racha_emoji = "🔥" if gami["racha_viva"] else "💤"
     st.markdown(f"""
@@ -583,9 +696,6 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # Menú principal — como pestañas horizontales en el contenido principal,
-    # en vez de en el sidebar. Así el menú siempre está a la vista, sin
-    # depender de un botón para abrir/cerrar un panel lateral.
     opcion_menu = st.radio(
         "📱 Menú Polibank",
         ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"],
@@ -594,7 +704,6 @@ else:
     )
     st.divider()
 
-    # Notificación de badges nuevos
     if "gami_notif" in st.session_state:
         notif = st.session_state.pop("gami_notif")
         for b in notif.get("badges_nuevos", []):
@@ -605,14 +714,10 @@ else:
                 unsafe_allow_html=True
             )
 
-    # ══════════════════════════════════════════
-    # SECCIÓN 1: FINANZAS PERSONALES
-    # ══════════════════════════════════════════
     if opcion_menu == "💰 Finanzas Personales":
 
         movimientos_db = obtener_movimientos(user_id)
 
-        # Calcular totales
         total_ingresos = 0.0
         total_egresos = 0.0
         historial_tabla = []
@@ -625,7 +730,7 @@ else:
             fecha_label = fecha_dt.strftime("%d-%b")
             if fecha_label not in datos_por_dia:
                 datos_por_dia[fecha_label] = {"Ingresos": 0.0, "Egresos": 0.0, "_orden": fecha_dt}
-            cat = mov.get("categoria", "OTROS").upper()
+            cat = (mov.get("categoria") or "OTROS").upper()
             if mov["tipo"] == "Ingreso":
                 total_ingresos += monto_num
                 datos_por_dia[fecha_label]["Ingresos"] += monto_num
@@ -647,7 +752,6 @@ else:
 
         balance = total_ingresos - total_egresos
 
-        # ── MÉTRICAS
         st.subheader("Resumen de tu Cuenta")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -680,7 +784,6 @@ else:
 
         st.write("")
 
-        # ── GRÁFICAS
         if datos_por_dia:
             tab_barras, tab_categorias, tab_linea = st.tabs(
                 ["📊 Ingresos vs Gastos", "📊 Gastos por Categoría", "📈 Saldo Acumulado"]
@@ -809,9 +912,6 @@ else:
 
         st.divider()
 
-        # ══════════════════════════════════════════
-        # REGISTRAR MOVIMIENTOS (ahora arriba del historial)
-        # ══════════════════════════════════════════
         st.subheader("Registrar Movimiento")
         tab_ing, tab_gas = st.tabs(["💵 Ingreso", "🛒 Gasto con IA"])
 
@@ -827,7 +927,6 @@ else:
                 )
                 if st.form_submit_button("💾 Guardar Ingreso", use_container_width=True):
                     if monto_ing > 0:
-                        # Subir factura si hay
                         url_factura = None
                         if factura_ing:
                             with st.spinner("Subiendo factura…"):
@@ -874,7 +973,7 @@ else:
                             c1, c2 = st.columns([4, 1])
                             with c1:
                                 if st.button(r["nombre"], key=f"rec_{r['id']}", use_container_width=True):
-                                    st.session_state["texto_gas_prefill"] = r["nombre"]
+                                    st.session_state["texto_gas_input"] = r["nombre"]
                                     st.rerun()
                             with c2:
                                 if st.button("🗑️", key=f"delrec_{r['id']}"):
@@ -896,7 +995,7 @@ else:
                 monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
                 texto_gas = st.text_input(
                     "¿En qué gastaste?",
-                    value=st.session_state.pop("texto_gas_prefill", ""),
+                    key="texto_gas_input",
                     placeholder="Almuerzo comedor FCSH, bus Guayaquil…",
                     label_visibility="collapsed"
                 )
@@ -943,15 +1042,11 @@ else:
 
         st.divider()
 
-        # ══════════════════════════════════════════
-        # HISTORIAL COMPACTO CON BÚSQUEDA POR FECHA
-        # ══════════════════════════════════════════
         st.subheader("🗒️ Historial de Movimientos")
 
         if historial_tabla:
             historial_tabla.sort(key=lambda x: x["_fecha_dt"], reverse=True)
 
-            # Filtros en una fila
             col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
             with col_f1:
                 filtro_tipo = st.selectbox("Tipo", ["Todos", "💵 Ingreso", "🛒 Gasto"], key="filtro_tipo")
@@ -960,7 +1055,6 @@ else:
             with col_f3:
                 fecha_hasta = st.date_input("Hasta", value=None, key="fecha_hasta")
 
-            # Aplicar filtros
             lista = historial_tabla.copy()
             if filtro_tipo != "Todos":
                 lista = [m for m in lista if m["Tipo"] == filtro_tipo]
@@ -972,7 +1066,6 @@ else:
             st.caption(f"Mostrando {min(len(lista), 8)} de {len(lista)} transacciones")
 
 
-            # Mostrar máximo 8 filas, el resto con expander
             def render_mov(mov):
                 es_ingreso = mov["Tipo"] == "💵 Ingreso"
                 color_m = COLOR_VERDE if es_ingreso else COLOR_ROJO
@@ -980,7 +1073,6 @@ else:
                 tiene_factura = bool(mov.get("_factura_url"))
                 icono_factura = " 📎" if tiene_factura else ""
 
-                # Fila principal: info + botón eliminar
                 col_info, col_del = st.columns([11, 1])
                 with col_info:
                     st.markdown(
@@ -1000,11 +1092,9 @@ else:
                             if ok:
                                 st.rerun()
 
-                # Panel de factura expandible debajo de la fila
                 if tiene_factura:
                     url = mov["_factura_url"]
                     with st.expander("📎 Ver factura adjunta"):
-                        # Detectar si es PDF o imagen por la URL
                         if url.lower().endswith(".pdf"):
                             st.markdown(
                                 f'<a href="{url}" target="_blank" style="font-weight:600;color:{COLOR_VERDE};">'
@@ -1012,7 +1102,6 @@ else:
                                 unsafe_allow_html=True
                             )
                         else:
-                            # Mostrar imagen directamente
                             st.image(url, use_container_width=True)
                             st.markdown(
                                 f'<a href="{url}" target="_blank" style="font-size:0.8rem;color:#888;">Ver en tamaño completo ↗</a>',
@@ -1020,11 +1109,9 @@ else:
                             )
 
 
-            # Primeros 8 visibles
             for mov in lista[:8]:
                 render_mov(mov)
 
-            # El resto dentro de un expander
             if len(lista) > 8:
                 with st.expander(f"Ver {len(lista) - 8} transacciones más…"):
                     for mov in lista[8:]:
@@ -1033,15 +1120,11 @@ else:
             st.info("No hay transacciones registradas aún.")
 
 
-    # ══════════════════════════════════════════
-    # SECCIÓN 2: MI PROGRESO
-    # ══════════════════════════════════════════
     elif opcion_menu == "🏆 Mi Progreso":
 
         gami = obtener_estado(user_id)
         racha_emoji = "🔥" if gami["racha_viva"] else "💤"
 
-        # ── Hero card progreso
         st.markdown(f"""
         <div class="gami-hero">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
@@ -1063,18 +1146,20 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
-        <div class="gami-stat-grid">
-          <div class="gami-stat">
-            <div class="gami-stat-val" style="color:{COLOR_ORO};">⭐ {gami['xp_total']}</div>
-            <div class="gami-stat-lbl">XP Total</div>
+        <div class="progreso-card">
+          <div class="progreso-escena">
+            {_svg_escena_racha(gami['racha_actual'], gami['racha_viva'])}
           </div>
-          <div class="gami-stat">
-            <div class="gami-stat-val" style="color:{COLOR_ROJO};">🔥 {gami['racha_actual']}</div>
-            <div class="gami-stat-lbl">Racha Actual</div>
-          </div>
-          <div class="gami-stat">
-            <div class="gami-stat-val" style="color:{COLOR_AZUL};">🏅 {len(gami['badges'])}/{len(BADGES)}</div>
-            <div class="gami-stat-lbl">Logros</div>
+          <div class="progreso-stats-row">
+            <div class="progreso-stat">
+              <div class="progreso-stat-val" style="color:{COLOR_ORO};">⭐ {gami['xp_total']}</div>
+              <div class="progreso-stat-lbl">XP Total</div>
+            </div>
+            <div class="progreso-divider"></div>
+            <div class="progreso-stat">
+              <div class="progreso-stat-val" style="color:{COLOR_AZUL};">🏅 {len(gami['badges'])}/{len(BADGES)}</div>
+              <div class="progreso-stat-lbl">Logros</div>
+            </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1089,7 +1174,6 @@ else:
         if gami["racha_maxima"] > 0:
             st.caption(f"🏆 Tu récord personal: **{gami['racha_maxima']} días** seguidos")
 
-        # Tabs: Logros | Ranking
         tab_ranking, tab_logros = st.tabs(["🏆 Ranking Semanal", "🏅 Mis Logros"])
 
         with tab_logros:
@@ -1151,20 +1235,17 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # Inicializar historial
         if "chat_historial" not in st.session_state:
             st.session_state["chat_historial"] = []
         if "chat_input_key" not in st.session_state:
             st.session_state["chat_input_key"] = 0
 
-        # Mensaje de bienvenida
         if not st.session_state["chat_historial"]:
             st.session_state["chat_historial"].append({
                 "rol": "asistente",
                 "texto": "¡Hola! 🐢 Soy Polibank, tu asistente personal. Puedo ayudarte con tus finanzas, responder preguntas, darte consejos personalizados o simplemente conversar. ¿En qué te ayudo hoy?"
             })
 
-        # Mostrar mensajes
         for msg in st.session_state["chat_historial"]:
             if msg["rol"] == "usuario":
                 with st.chat_message("user"):
@@ -1173,7 +1254,6 @@ else:
                 with st.chat_message("assistant", avatar="🐢"):
                     st.write(msg["texto"])
 
-        # Sugerencias rápidas
         if len(st.session_state["chat_historial"]) <= 1:
             st.markdown("**Preguntas frecuentes:**")
             sugs = [
@@ -1199,7 +1279,6 @@ else:
                         st.session_state["chat_input_key"] += 1
                         st.rerun()
 
-        # Input del usuario
         user_input = st.chat_input("Escribe tu mensaje...", key=f"chat_{st.session_state['chat_input_key']}")
         if user_input and user_input.strip():
             st.session_state["chat_historial"].append({"rol": "usuario", "texto": user_input.strip()})
@@ -1215,7 +1294,6 @@ else:
             st.session_state["chat_input_key"] += 1
             st.rerun()
 
-        # Botón limpiar — discreto, debajo del input
         if len(st.session_state["chat_historial"]) > 1:
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             col_esp, col_btn = st.columns([3, 1])
@@ -1227,7 +1305,6 @@ else:
 
     elif opcion_menu == "📚 Academia Financiera":
 
-        # Banner TikTok
         st.markdown("""
         <div style="background:linear-gradient(135deg,#010101,#69C9D0);
                     border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:16px;">
@@ -1244,5 +1321,4 @@ else:
                            use_container_width=True)
         st.divider()
 
-        # Sistema de lecciones estilo Duolingo
         render_academia(user_id, registrar_accion)
