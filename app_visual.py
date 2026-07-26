@@ -49,11 +49,18 @@ st.markdown(f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
 
-  /* Se oculta solo el toolbar (botón "Deploy", menú de tres puntos) —
-     NO el header completo, para no romper accesos nativos de Streamlit. */
-  [data-testid="stToolbar"] {{visibility: hidden;}}
-  #MainMenu {{visibility: hidden;}}
-  footer {{visibility: hidden;}}
+  /* Ocultar todos los elementos de marca de Streamlit */
+  [data-testid="stToolbar"] {{ visibility: hidden; height: 0; }}
+  [data-testid="stDecoration"] {{ display: none; }}
+  [data-testid="stStatusWidget"] {{ display: none; }}
+  [data-testid="manage-app-button"] {{ display: none; }}
+  #MainMenu {{ visibility: hidden; }}
+  footer {{ visibility: hidden; height: 0; }}
+  header {{ visibility: hidden; height: 0; }}
+  .stDeployButton {{ display: none; }}
+  [data-testid="stToolbarActions"] {{ display: none; }}
+  /* Quitar espacio vacío del header oculto */
+  .block-container {{ padding-top: 1rem !important; }}
 
   html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; color: {COLOR_TINTA}; }}
   h1, h2, h3, .metric-value, .progreso-stat-val {{ font-family: 'Sora', sans-serif; }}
@@ -182,6 +189,31 @@ st.markdown(f"""
   [class*="st-key-movcard_"] [data-testid="stVerticalBlockBorderWrapper"] {{ padding: 0 !important; }}
   .mov-detalle {{ font-size: 0.92rem; color: {COLOR_TINTA}; font-weight: 600; }}
   .mov-monto {{ font-size: 1.1rem; font-weight: 800; }}
+  /* Botón eliminar — fondo menta muy claro, sin rosa */
+  div[data-testid="column"]:last-child button {{
+    background: #EEF8F3 !important;
+    border: 1px solid #C3E8D5 !important;
+    color: #7AB89A !important;
+    padding: 2px 8px !important;
+    font-size: 0.72rem !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+    min-height: 0 !important;
+  }}
+  div[data-testid="column"]:last-child button:hover {{
+    background: #D6F0E4 !important;
+    border-color: #0F5C3B !important;
+    color: #0F5C3B !important;
+  }}
+  div[data-testid="column"]:last-child button:active {{
+    background: #C3E8D5 !important;
+  }}
+  /* Eliminar el fondo rosado que Streamlit pone por defecto */
+  div[data-testid="column"]:last-child .stButton > button {{
+    background-color: #EEF8F3 !important;
+    border-color: #C3E8D5 !important;
+    color: #7AB89A !important;
+  }}
 
   /* Etiquetas de categorías pulidas (píldoras de colores pastel) */
   .badge-cat {{ display:inline-block; padding:5px 12px; border-radius:100px; font-size:0.66rem; font-weight:800; letter-spacing: 0.4px; }}
@@ -1071,7 +1103,7 @@ else:
                 es_ingreso = mov["Tipo"] == "💵 Ingreso"
                 color_m = COLOR_VERDE if es_ingreso else COLOR_ROJO
                 tiene_factura = bool(mov.get("_factura_url"))
-                icono_factura = " 📎" if tiene_factura else ""
+                icono_factura = ""  # Sin emoji de clip en el detalle
 
                 with st.container(key=f"movcard_{mov['_id']}"):
                     col_info, col_del = st.columns([11, 1], vertical_alignment="center")
@@ -1089,7 +1121,7 @@ else:
                         )
                     with col_del:
                         with st.container(key=f"delbtn_{mov['_id']}"):
-                            if mov.get("_id") and st.button("🗑️", key=f"del_{mov['_id']}"):
+                            if mov.get("_id") and st.button("✕", key=f"del_{mov['_id']}"):
                                 ok, _ = eliminar_movimiento(mov["_id"])
                                 if ok:
                                     st.rerun()
