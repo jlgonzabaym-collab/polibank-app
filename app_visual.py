@@ -1006,7 +1006,9 @@ else:
                             c1, c2 = st.columns([4, 1])
                             with c1:
                                 if st.button(r["nombre"], key=f"rec_{r['id']}", use_container_width=True):
-                                    st.session_state["texto_gas_input"] = r["nombre"]
+                                    st.session_state["texto_gas_valor"] = r["nombre"]
+                                    st.session_state["texto_gas_counter"] = \
+                                        st.session_state.get("texto_gas_counter", 0) + 1
                                     st.rerun()
                             with c2:
                                 if st.button("🗑️", key=f"delrec_{r['id']}"):
@@ -1028,7 +1030,8 @@ else:
                 monto_gas = st.number_input("Monto ($)", min_value=0.01, step=1.0)
                 texto_gas = st.text_input(
                     "¿En qué gastaste?",
-                    key="texto_gas_input",
+                    value=st.session_state.get("texto_gas_valor", ""),
+                    key=f"texto_gas_input_{st.session_state.get('texto_gas_counter', 0)}",
                     placeholder="Almuerzo comedor FCSH, bus Guayaquil…",
                     label_visibility="collapsed"
                 )
@@ -1057,6 +1060,7 @@ else:
                             factura_url=url_factura
                         )
                         if exito:
+                            st.session_state["texto_gas_valor"] = ""
                             res_gami = registrar_accion(user_id, "gasto")
                             sumar_xp_semanal(user_id, res_gami["xp_ganado"])
                             st.session_state["gami_notif"] = res_gami
