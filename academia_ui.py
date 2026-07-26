@@ -52,8 +52,15 @@ CSS = f"""
 }}
 .curso-card:hover {{ transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.12); }}
 
-.curso-img {{
-  width: 100%; height: 100px; object-fit: cover; display: block;
+.curso-card img.curso-img {{
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100px !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }}
 .curso-img-placeholder {{
   width: 100%; height: 100px; display: flex; align-items: center;
