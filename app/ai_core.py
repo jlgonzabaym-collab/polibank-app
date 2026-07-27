@@ -18,15 +18,73 @@ def _generar(sistema: str, prompt: str) -> str:
 
 
 # ─── 1. CLASIFICAR GASTO ────────────────────────────────────
+CATEGORIAS_GASTO = ["comida", "transporte", "estudios", "diversion", "otros"]
+
+# Palabras clave de respaldo: si la IA falla o responde algo raro, esto
+# nunca deja un gasto sin categoría.
+_PALABRAS_CLAVE = {
+    "comida": [
+        "mesada", "almuerzo", "comida", "desayuno", "cena", "merienda",
+        "restaurante", "kfc", "mcdonald", "pizza", "hamburguesa", "cafe",
+        "café", "bebida", "snack", "super", "supermercado", "mercado",
+        "menu", "menú", "tienda", "panaderia", "panadería",
+    ],
+    "transporte": [
+        "bus", "buseta", "taxi", "uber", "cabify", "indriver", "gasolina",
+        "combustible", "pasaje", "peaje", "parqueo", "parqueadero", "metro",
+        "metrovia", "metrovía", "carro", "moto", "transporte",
+    ],
+    "estudios": [
+        "matricula", "matrícula", "libro", "libros", "fotocopia", "fotocopias",
+        "impresion", "impresión", "curso", "certificado", "espol", "universidad",
+        "utiles", "útiles", "material", "clases", "colegiatura", "laboratorio",
+    ],
+    "diversion": [
+        "cine", "netflix", "spotify", "juego", "videojuego", "salida",
+        "fiesta", "bar", "discoteca", "concierto", "streaming", "cerveza",
+        "salir", "paseo", "diversion", "diversión",
+    ],
+}
+
+
+def _clasificar_por_palabras_clave(texto: str) -> str | None:
+    texto_norm = texto.lower().strip()
+    for categoria, palabras in _PALABRAS_CLAVE.items():
+        if any(palabra in texto_norm for palabra in palabras):
+            return categoria
+    return None
+
+
 def clasificar_gasto(texto_usuario: str) -> str:
     sistema = (
-        "Eres el clasificador de gastos de Polibank. "
-        "Lee lo que gastó el usuario y devuelve SOLO una de estas palabras "
-        "en minúscula y sin puntos: comida, transporte, estudios, diversion, otros."
+        "Eres el clasificador de gastos de Polibank, para universitarios ecuatorianos. "
+        "Tu trabajo es DEDUCIR la categoría más probable, incluso con palabras cortas, "
+        "coloquiales o ambiguas — nunca dejes de elegir una.\n\n"
+        "Categorías y ejemplos típicos en Ecuador:\n"
+        "- comida: mesada, almuerzo, desayuno, cena, merienda, restaurante, "
+        "comida rápida, café, snacks, mercado, supermercado.\n"
+        "- transporte: bus, buseta, taxi, Uber, InDriver, gasolina, pasaje, "
+        "peaje, parqueo, metrovía.\n"
+        "- estudios: matrícula, libros, fotocopias, impresiones, cursos, "
+        "útiles escolares, material de laboratorio.\n"
+        "- diversion: cine, salidas, fiestas, streaming (Netflix/Spotify), "
+        "videojuegos, conciertos.\n"
+        "- otros: cualquier cosa que no encaje claramente en las anteriores "
+        "(ropa, salud, regalos, imprevistos).\n\n"
+        "'Mesada' es dinero que los papás dan para gastos del día a día, así "
+        "que casi siempre corresponde a 'comida' salvo que el texto diga otra cosa.\n\n"
+        "Responde ÚNICAMENTE con una de estas palabras, en minúscula, sin puntos "
+        "ni explicación: comida, transporte, estudios, diversion, otros."
     )
-    resultado = _generar(sistema, f"Gasto: {texto_usuario}")
-    categorias = ["comida", "transporte", "estudios", "diversion", "otros"]
-    return resultado if resultado in categorias else "otros"
+    resultado = _generar(sistema, f"Gasto: {texto_usuario}").lower().strip()
+
+    if resultado in CATEGORIAS_GASTO:
+        return resultado
+
+    # La IA no devolvió algo usable (vacío, con texto extra, etc.) —
+    # antes de rendirnos con "otros", probamos por palabras clave.
+    por_palabra = _clasificar_por_palabras_clave(texto_usuario)
+    return por_palabra or "otros"
 
 
 # ─── 2. LECCIONES ADAPTATIVAS ───────────────────────────────
@@ -152,7 +210,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         historial_txt += f"{rol}: {msg['texto']}\n"
 
     sistema = (
-        "Eres Polibank 🐢, el asistente personal de un estudiante universitario de ESPOL en Ecuador. "
+        "Eres Polito 🐢, el asistente personal de un estudiante universitario de ESPOL en Ecuador. "
         "Tienes personalidad amigable, cercana y un poco divertida — como un amigo que sabe de todo. "
         "Puedes responder CUALQUIER pregunta: matemáticas, cultura general, chistes, consejos de vida, "
         "finanzas, tecnología, lo que sea. No rechaces ninguna pregunta. "
@@ -160,7 +218,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         "Cuando el usuario pregunte sobre sus finanzas, usa sus datos reales. "
         "Respuestas naturales y conversacionales, máximo 4 oraciones. "
         "Usa emojis con moderación. Habla en español ecuatoriano informal. "
-        "Nunca digas que eres una IA o un modelo de lenguaje — eres Polibank la tortuga. "
+        "Nunca digas que eres una IA o un modelo de lenguaje — eres Polito, la tortuga financiera de Polibank. "
         "Si el usuario saluda, saluda de vuelta con energía. "
         "Si hace una pregunta de matemáticas o general, respóndela directo y con confianza."
     )
@@ -175,7 +233,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         f"Usuario: {pregunta}"
     )
 
-    return _generar(sistema, prompt) or "Estoy aquí para ayudarte 🐢 ¿Puedes repetir tu pregunta?"
+    return _generar(sistema, prompt) or "Estoy aquí para ayudarte 🐢 Soy Polito, ¿puedes repetir tu pregunta?"
 
 
 # ─── 5. QUIZ GENERADO POR IA ────────────────────────────────
