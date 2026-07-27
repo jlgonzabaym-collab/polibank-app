@@ -93,7 +93,7 @@ def render_asistente_flotante(user_id: int, movimientos: list, gami_estado: dict
           <div class="chat-header">
             <div class="chat-avatar">🐢</div>
             <div>
-              <div class="chat-nombre">Polibank IA</div>
+              <div class="chat-nombre">Polito IA</div>
               <div class="chat-sub">Tu asistente financiero personal</div>
             </div>
           </div>
