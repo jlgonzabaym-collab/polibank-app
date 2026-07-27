@@ -1266,8 +1266,8 @@ else:
           <div style="display:flex;align-items:center;gap:12px;">
             <span style="font-size:2.5rem;">🐢</span>
             <div>
-              <div style="font-size:1.1rem;font-weight:800;">Asistente Polibank</div>
-              <div style="font-size:0.82rem;opacity:.85;">Tu amigo financiero personal · Siempre disponible</div>
+              <div style="font-size:1.1rem;font-weight:800;">Polito 🐢</div>
+              <div style="font-size:0.82rem;opacity:.85;">Tu asistente financiero personal</div>
             </div>
           </div>
         </div>
@@ -1281,7 +1281,7 @@ else:
         if not st.session_state["chat_historial"]:
             st.session_state["chat_historial"].append({
                 "rol": "asistente",
-                "texto": "¡Hola! 🐢 Soy Polibank, tu asistente personal. Puedo ayudarte con tus finanzas, responder preguntas, darte consejos personalizados o simplemente conversar. ¿En qué te ayudo hoy?"
+                "texto": "¡Hola! Soy Polito 🐢, tu asistente personal. Puedo ayudarte con tus finanzas, responder preguntas, darte consejos o simplemente conversar. ¿En qué te ayudo hoy?"
             })
 
         for msg in st.session_state["chat_historial"]:
