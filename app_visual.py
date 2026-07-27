@@ -731,7 +731,7 @@ else:
 
     opcion_menu = st.radio(
         "📱 Menú Polibank",
-        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polibank"],
+        ["💰 Finanzas Personales", "🏆 Mi Progreso", "📚 Academia Financiera", "🐢 Asistente Polito"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -1258,7 +1258,7 @@ else:
             render_leaderboard(user_id)
 
 
-    elif opcion_menu == "🐢 Asistente Polibank":
+    elif opcion_menu == "🐢 Asistente Polito":
 
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,{COLOR_VERDE},{COLOR_VERDE_CLARO});
@@ -1266,7 +1266,7 @@ else:
           <div style="display:flex;align-items:center;gap:12px;">
             <span style="font-size:2.5rem;">🐢</span>
             <div>
-              <div style="font-size:1.1rem;font-weight:800;">Asistente Polibank</div>
+              <div style="font-size:1.1rem;font-weight:800;">Asistente Polito</div>
               <div style="font-size:0.82rem;opacity:.85;">Tu amigo financiero personal · Siempre disponible</div>
             </div>
           </div>
