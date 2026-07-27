@@ -81,7 +81,7 @@ def render_asistente_flotante(user_id: int, movimientos: list, gami_estado: dict
     with col_btn:
         etiqueta = "✕" if st.session_state["chat_abierto"] else "🐢"
         if st.button(etiqueta, key="btn_flotante",
-                     help="Asistente Polibank",
+                     help="Asistente Polito",
                      use_container_width=True):
             st.session_state["chat_abierto"] = not st.session_state["chat_abierto"]
             st.rerun()
@@ -104,7 +104,7 @@ def render_asistente_flotante(user_id: int, movimientos: list, gami_estado: dict
         if not st.session_state["chat_historial"]:
             st.session_state["chat_historial"].append({
                 "rol": "asistente",
-                "texto": "¡Hola! 🐢 Soy Polibank, tu asistente financiero. Puedo ayudarte a entender tus gastos, darte consejos personalizados o responder cualquier duda de finanzas. ¿En qué te ayudo?"
+                "texto": "¡Hola! Soy Polito, tu asistente financiero. Puedo ayudarte a entender tus gastos, darte consejos personalizados o responder cualquier duda de finanzas. ¿En qué te ayudo?"
             })
 
         # Mostrar mensajes
