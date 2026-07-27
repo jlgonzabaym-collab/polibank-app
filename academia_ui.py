@@ -330,7 +330,7 @@ def _render_video(curso, progreso):
     """, unsafe_allow_html=True)
 
     # Video
-    st.subheader("📺 Video del curso")
+    st.subheader("Video del curso")
     st.video(curso["url_video"])
 
     st.write("")
