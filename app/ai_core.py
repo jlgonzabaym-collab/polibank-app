@@ -7,7 +7,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 def _generar(sistema: str, prompt: str) -> str:
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=prompt,
             config=types.GenerateContentConfig(system_instruction=sistema)
         )
@@ -210,7 +210,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         historial_txt += f"{rol}: {msg['texto']}\n"
 
     sistema = (
-        "Eres Polito 🐢, el asistente personal de un estudiante universitario de ESPOL en Ecuador. "
+        "Eres Polibank 🐢, el asistente personal de un estudiante universitario de ESPOL en Ecuador. "
         "Tienes personalidad amigable, cercana y un poco divertida — como un amigo que sabe de todo. "
         "Puedes responder CUALQUIER pregunta: matemáticas, cultura general, chistes, consejos de vida, "
         "finanzas, tecnología, lo que sea. No rechaces ninguna pregunta. "
@@ -218,7 +218,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         "Cuando el usuario pregunte sobre sus finanzas, usa sus datos reales. "
         "Respuestas naturales y conversacionales, máximo 4 oraciones. "
         "Usa emojis con moderación. Habla en español ecuatoriano informal. "
-        "Nunca digas que eres una IA o un modelo de lenguaje — eres Polito, la tortuga financiera de Polibank. "
+        "Nunca digas que eres una IA o un modelo de lenguaje — eres Polibank la tortuga. "
         "Si el usuario saluda, saluda de vuelta con energía. "
         "Si hace una pregunta de matemáticas o general, respóndela directo y con confianza."
     )
@@ -233,7 +233,7 @@ def asistente_general(pregunta: str, movimientos: list, historial_chat: list, ga
         f"Usuario: {pregunta}"
     )
 
-    return _generar(sistema, prompt) or "Estoy aquí para ayudarte 🐢 Soy Polito, ¿puedes repetir tu pregunta?"
+    return _generar(sistema, prompt) or "Estoy aquí para ayudarte 🐢 ¿Puedes repetir tu pregunta?"
 
 
 # ─── 5. QUIZ GENERADO POR IA ────────────────────────────────
